@@ -13,9 +13,10 @@ module.exports = {
     if (!channel) return;
 
     try {
-      await channel.send(buildWelcomeMessage(member));
+      await channel.send(buildWelcomeMessage(member, member.guild));
     } catch (err) {
       console.error('[guildMemberAdd] failed to send welcome message', err);
     }
   },
 };
+

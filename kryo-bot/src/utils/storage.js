@@ -54,11 +54,13 @@ const DEFAULT_GUILD_CONFIG = {
   pingRole: null,
   pingProtectedUserId: null,
   pingAllowedRoles: [], // roles that can ping without warnings
-  
+
   commandAllowRoles: [], // roles allowed to use bot commands (max 5)
 
   welcomeChannel: null,
   welcomeEnabled: false,
+  welcomeImage: null, // big image on welcome message
+
 };
 
 function getGuildConfig(guildId) {
