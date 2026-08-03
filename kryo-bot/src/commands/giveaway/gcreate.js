@@ -22,7 +22,9 @@ module.exports = {
       return interaction.reply({ content: 'Invalid duration. Use a format like `30s`, `10m`, `1h`, `2d`, or `1w`.', ephemeral: true });
     }
 
+    await interaction.deferReply({ ephemeral: true });
     await startGiveaway(interaction, { prize, durationMs, winnerCount });
-    await interaction.reply({ content: `Giveaway for **${prize}** started!`, ephemeral: true });
+    await interaction.editReply({ content: `Giveaway for **${prize}** started!` });
   },
 };
+

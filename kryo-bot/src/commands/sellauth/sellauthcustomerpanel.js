@@ -20,6 +20,7 @@ module.exports = {
       });
     }
 
+    await interaction.deferReply({ ephemeral: true });
     const image = interaction.options.getAttachment('image');
 
     const embed = new EmbedBuilder()
@@ -33,6 +34,7 @@ module.exports = {
     );
 
     await interaction.channel.send({ embeds: [embed], components: [row] });
-    await interaction.reply({ content: 'Claim Role panel sent.', ephemeral: true });
+    await interaction.editReply({ content: 'Claim Role panel sent.' });
   },
 };
+
