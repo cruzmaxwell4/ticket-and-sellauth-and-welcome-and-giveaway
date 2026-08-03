@@ -1,15 +1,6 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const storage = require('../../utils/storage');
 const sellauth = require('../../utils/sellauth');
-
-const STATUS_COLORS = {
-  completed: 0x57f287,
-  paid: 0x57f287,
-  pending: 0xfee75c,
-  failed: 0xed4245,
-  refunded: 0xed4245,
-  cancelled: 0xed4245,
-};
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -24,42 +15,65 @@ module.exports = {
     }
 
     const invoiceId = interaction.options.getString('invoice_id');
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply();
 
     try {
       const invoice = await sellauth.getInvoice(cfg.sellauthShopId, cfg.sellauthApiKey, invoiceId);
       const status = (invoice.status || 'unknown').toLowerCase();
       const total = sellauth.getInvoiceTotal(invoice);
       const products = sellauth.getInvoiceProductNames(invoice);
-      const created = invoice.created_at ? `<t:${Math.floor(new Date(invoice.created_at).getTime() / 1000)}:F>` : 'Unknown';
+      const created = invoice.created_at ? new Date(invoice.created_at) : null;
+      const completed = invoice.paid_at ? new Date(invoice.paid_at) : null;
 
       // Get stored invoice details from database
       const invoiceDetails = storage.getInvoiceDetails(interaction.guild.id, invoiceId);
-      
-      // Extract customer info from invoice or stored data
+
+      // Extract customer info
       const customerEmail = invoiceDetails?.customerEmail || invoice.email || invoice.customer_email || 'N/A';
-      const browser = invoiceDetails?.browser || 'N/A';
+      const paymentMethod = invoice.payment_method || 'N/A';
       const isUsed = invoiceDetails ? 'Yes' : 'No';
 
-      const embed = new EmbedBuilder()
-        .setColor(STATUS_COLORS[status] || 0x5865f2)
-        .setTitle(`Invoice #${invoice.id ?? invoiceId}`)
-        .addFields(
-          { name: '📊 Status', value: status.charAt(0).toUpperCase() + status.slice(1), inline: true },
-          { name: '💵 Price', value: total !== null ? `$${total} ${invoice.currency || 'USD'}` : 'Unknown', inline: true },
-          { name: '📦 Product', value: products, inline: false },
-          { name: '📅 Date/Time', value: created, inline: true },
-          { name: '✅ Invoice Used', value: isUsed, inline: true },
-          { name: '📧 Customer Email', value: customerEmail, inline: false },
-          { name: '🌐 Browser', value: browser, inline: true },
-        );
+      // Format dates
+      const createdStr = created
+        ? `${created.getDate().toString().padStart(2, '0')}/${(created.getMonth() + 1).toString().padStart(2, '0')}/${created.getFullYear()} • ${created.getHours().toString().padStart(2, '0')}:${created.getMinutes().toString().padStart(2, '0')} BST`
+        : 'N/A';
 
-      if (invoiceDetails?.claimedAt) {
-        const claimedTime = `<t:${Math.floor(invoiceDetails.claimedAt / 1000)}:F>`;
-        embed.addFields({ name: '🔐 Claimed At', value: claimedTime, inline: true });
-      }
+      const completedStr = completed
+        ? `${completed.getDate().toString().padStart(2, '0')}/${(completed.getMonth() + 1).toString().padStart(2, '0')}/${completed.getFullYear()} • ${completed.getHours().toString().padStart(2, '0')}:${completed.getMinutes().toString().padStart(2, '0')} BST`
+        : 'N/A';
 
-      await interaction.editReply({ embeds: [embed] });
+      const statusEmoji = status === 'completed' || status === 'paid' ? '🟢' : status === 'pending' ? '🟡' : '🔴';
+
+      const text = `📄 Invoice #${invoice.id ?? invoiceId}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🛒 **Product**
+${products}
+
+💰 **Total Price**
+${total !== null ? `$${total} ${invoice.currency || 'USD'}` : 'N/A'}
+
+👤 **Customer**
+${customerEmail}
+
+💳 **Payment Method**
+${paymentMethod.toUpperCase()}
+
+📅 **Order Created**
+${createdStr}
+
+✅ **Order Completed**
+${completedStr}
+
+📊 **Current Status**
+${statusEmoji} ${status.charAt(0).toUpperCase() + status.slice(1)}
+
+🔑 **Delivery Status**
+${isUsed === 'Yes' ? 'Keys claimed by user' : 'Pending delivery'}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Thank you for your purchase!`;
+
+      await interaction.editReply(text);
     } catch (err) {
       if (err.response?.status === 404) {
         return interaction.editReply(`No invoice found matching \`${invoiceId}\`.`);
