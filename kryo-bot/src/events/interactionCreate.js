@@ -1,0 +1,264 @@
+const {
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder,
+} = require('discord.js');
+const storage = require('../utils/storage');
+const { isOwner, isSupport } = require('../utils/permissions');
+const sellauth = require('../utils/sellauth');
+const ticketService = require('../handlers/ticketService');
+
+const OWNER_ONLY_MSG = 'Only the owner can use this button.';
+
+async function handleChatInputCommand(interaction) {
+  const command = interaction.client.commands.get(interaction.commandName);
+  if (!command) return;
+  try {
+    await command.execute(interaction);
+  } catch (err) {
+    console.error(`[command] /${interaction.commandName} failed`, err);
+    const payload = { content: 'Something went wrong running that command.', ephemeral: true };
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp(payload).catch(() => {});
+    } else {
+      await interaction.reply(payload).catch(() => {});
+    }
+  }
+}
+
+async function handleTicketButton(interaction) {
+  const ticket = storage.getTicket(interaction.channel.id);
+
+  if (interaction.customId === 'ticket_open') {
+    return ticketService.openTicket(interaction);
+  }
+
+  if (!ticket) {
+    return interaction.reply({ content: 'This is not a ticket channel.', ephemeral: true });
+  }
+
+  if (interaction.customId === 'ticket_transcript') {
+    if (!isSupport(interaction, storage.getGuildConfig(interaction.guild.id))) {
+      return interaction.reply({ content: 'Only staff can request a transcript.', ephemeral: true });
+    }
+    await interaction.deferReply({ ephemeral: true });
+    await ticketService.sendTranscript(interaction, interaction.channel, ticket);
+    return interaction.editReply('Transcript sent.');
+  }
+
+  if (interaction.customId === 'ticket_close') {
+    if (!isOwner(interaction)) return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+    await interaction.deferReply({ ephemeral: true });
+    await ticketService.closeTicket(interaction, interaction.channel, ticket);
+    return interaction.editReply('Ticket closed.');
+  }
+
+  if (interaction.customId === 'ticket_waste') {
+    if (!isOwner(interaction)) return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+    await interaction.deferReply({ ephemeral: true });
+    try {
+      const member = await ticketService.wasteOfTime(interaction, ticket);
+      return interaction.editReply(`${member.user.tag} has been timed out for 28 days.`);
+    } catch (err) {
+      console.error('[ticket_waste]', err);
+      return interaction.editReply('Could not time out that member (missing permissions or role hierarchy issue).');
+    }
+  }
+
+  if (interaction.customId === 'ticket_giverole') {
+    if (!isOwner(interaction)) return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+    return interaction.reply({
+      content: 'Pick a role to give the ticket opener:',
+      components: [ticketService.guildRoleSelectMenu(interaction.guild)],
+      ephemeral: true,
+    });
+  }
+}
+
+async function handleGiveawayEnter(interaction) {
+  const giveaway = storage.getGiveaway(interaction.message.id);
+  if (!giveaway || giveaway.ended) {
+    return interaction.reply({ content: 'This giveaway has ended.', ephemeral: true });
+  }
+
+  const entries = giveaway.entries || [];
+  const idx = entries.indexOf(interaction.user.id);
+  if (idx === -1) {
+    entries.push(interaction.user.id);
+    storage.setGiveaway(interaction.message.id, { entries });
+    return interaction.reply({ content: `You're entered for **${giveaway.prize}**! 🎉`, ephemeral: true });
+  }
+
+  entries.splice(idx, 1);
+  storage.setGiveaway(interaction.message.id, { entries });
+  return interaction.reply({ content: 'You left the giveaway.', ephemeral: true });
+}
+
+async function handleSellauthClaimButton(interaction) {
+  const modal = new ModalBuilder()
+    .setCustomId('sellauth_claim_modal')
+    .setTitle('Claim Your Purchase Role')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('invoice_id')
+          .setLabel('Invoice ID')
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder('e.g. 98b3f45d848c5-0000000000632')
+          .setRequired(true),
+      ),
+    );
+  await interaction.showModal(modal);
+}
+
+async function handleRestockSelect(interaction) {
+  const productId = interaction.values[0];
+  const modal = new ModalBuilder()
+    .setCustomId(`sellauth_restock_modal_${productId}`)
+    .setTitle('Add Stock')
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId('stock_lines')
+          .setLabel('New stock (one item per line)')
+          .setStyle(TextInputStyle.Paragraph)
+          .setRequired(true),
+      ),
+    );
+  await interaction.showModal(modal);
+}
+
+async function handleTicketGiveRoleSelect(interaction) {
+  if (!isOwner(interaction)) return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+
+  const ticket = storage.getTicket(interaction.channel.id);
+  if (!ticket) return interaction.reply({ content: 'This is not a ticket channel.', ephemeral: true });
+
+  const roleId = interaction.values[0];
+  const role = interaction.guild.roles.cache.get(roleId);
+  if (!role) return interaction.reply({ content: 'That role no longer exists.', ephemeral: true });
+
+  try {
+    const member = await interaction.guild.members.fetch(ticket.openerId);
+    await member.roles.add(role);
+    await interaction.reply({ content: `Gave ${role} to ${member}.`, ephemeral: true });
+  } catch (err) {
+    console.error('[ticket_giverole_select]', err);
+    await interaction.reply({ content: 'Could not give that role (check the bot role position/permissions).', ephemeral: true });
+  }
+}
+
+async function handleSellauthClaimModal(interaction) {
+  const cfg = storage.getGuildConfig(interaction.guild.id);
+  if (!cfg.sellauthShopId || !cfg.sellauthApiKey) {
+    return interaction.reply({ content: 'SellAuth is not connected yet, ask an admin to set it up.', ephemeral: true });
+  }
+
+  const invoiceId = interaction.fields.getTextInputValue('invoice_id').trim();
+  await interaction.deferReply({ ephemeral: true });
+
+  let invoice;
+  try {
+    invoice = await sellauth.getInvoice(cfg.sellauthShopId, cfg.sellauthApiKey, invoiceId);
+  } catch (err) {
+    return interaction.editReply('That invoice could not be found. Double check the ID and try again.');
+  }
+
+  const status = (invoice.status || '').toLowerCase();
+  if (status !== 'completed' && status !== 'paid') {
+    return interaction.editReply(`That invoice is not valid for a role claim (status: **${status || 'unknown'}**).`);
+  }
+
+  if (storage.isInvoiceClaimed(interaction.guild.id, invoiceId)) {
+    return interaction.editReply('That invoice has already been used to claim a role.');
+  }
+
+  const total = Number(sellauth.getInvoiceTotal(invoice) || 0);
+  const tiers = [
+    { min: 300, roleId: cfg.sellauthRole300, label: '$300+' },
+    { min: 50, roleId: cfg.sellauthRole50, label: '$50+' },
+    { min: 1, roleId: cfg.sellauthRole1, label: '$1+' },
+  ].filter((t) => t.roleId && total >= t.min);
+
+  if (tiers.length === 0) {
+    return interaction.editReply(`This invoice totals $${total}, which doesn't qualify for any configured purchase role.`);
+  }
+
+  const member = await interaction.guild.members.fetch(interaction.user.id);
+  const given = [];
+  for (const tier of tiers) {
+    const role = interaction.guild.roles.cache.get(tier.roleId);
+    if (!role) continue;
+    try {
+      await member.roles.add(role);
+      given.push(role.toString());
+    } catch (err) {
+      console.error('[sellauth_claim_modal] role add failed', err);
+    }
+  }
+
+  storage.markInvoiceClaimed(interaction.guild.id, invoiceId, interaction.user.id);
+  storage.addClaimedRole(interaction.guild.id, interaction.user.id, tiers.map((t) => t.label).join(','));
+
+  await interaction.editReply(given.length ? `Invoice verified! You've been given: ${given.join(', ')}` : 'Invoice verified, but I could not assign the role(s) - ask an admin to check my role position.');
+}
+
+async function handleRestockModal(interaction) {
+  const productId = interaction.customId.replace('sellauth_restock_modal_', '');
+  const cfg = storage.getGuildConfig(interaction.guild.id);
+  const lines = interaction.fields
+    .getTextInputValue('stock_lines')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return interaction.reply({ content: 'No stock lines provided.', ephemeral: true });
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+  try {
+    await sellauth.appendDeliverables(cfg.sellauthShopId, cfg.sellauthApiKey, productId, lines);
+    await interaction.editReply(`Added ${lines.length} new stock line(s) to product \`${productId}\`.`);
+  } catch (err) {
+    console.error('[sellauth_restock_modal]', err);
+    await interaction.editReply(
+      'Could not restock automatically (this product may use variants, which SellAuth restocks differently). Please restock it from the SellAuth dashboard instead.',
+    );
+  }
+}
+
+module.exports = {
+  name: 'interactionCreate',
+  once: false,
+  async execute(interaction) {
+    try {
+      if (interaction.isChatInputCommand()) return handleChatInputCommand(interaction);
+
+      if (interaction.isButton()) {
+        if (interaction.customId.startsWith('ticket_')) return handleTicketButton(interaction);
+        if (interaction.customId === 'giveaway_enter') return handleGiveawayEnter(interaction);
+        if (interaction.customId === 'sellauth_claim_role') return handleSellauthClaimButton(interaction);
+      }
+
+      if (interaction.isStringSelectMenu()) {
+        if (interaction.customId === 'ticket_giverole_select') return handleTicketGiveRoleSelect(interaction);
+        if (interaction.customId === 'sellauth_restock_select') return handleRestockSelect(interaction);
+      }
+
+      if (interaction.isModalSubmit()) {
+        if (interaction.customId === 'sellauth_claim_modal') return handleSellauthClaimModal(interaction);
+        if (interaction.customId.startsWith('sellauth_restock_modal_')) return handleRestockModal(interaction);
+      }
+    } catch (err) {
+      console.error('[interactionCreate] unhandled error', err);
+      const payload = { content: 'Something went wrong.', ephemeral: true };
+      if (interaction.deferred || interaction.replied) {
+        await interaction.followUp(payload).catch(() => {});
+      } else if (interaction.isRepliable?.()) {
+        await interaction.reply(payload).catch(() => {});
+      }
+    }
+  },
+};
