@@ -4,15 +4,15 @@ const storage = require('../../utils/storage');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('pingroleallow')
-    .setDescription('Allow a user to ping the protected role without warnings or timeouts')
+    .setDescription('Allow a role to ping the protected role without warnings or timeouts')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
-    .addUserOption((opt) => opt.setName('user').setDescription('User to allow').setRequired(true)),
+    .addRoleOption((opt) => opt.setName('role').setDescription('Role to allow ping without restrictions').setRequired(true)),
 
   async execute(interaction) {
-    const user = interaction.options.getUser('user');
-    storage.addPingAllow(interaction.guild.id, user.id);
+    const role = interaction.options.getRole('role');
+    storage.addPingAllowRole(interaction.guild.id, role.id);
     await interaction.reply({
-      content: `${user} can now ping the protected role without warnings or timeouts.`,
+      content: `Members with ${role} can now ping the protected role without warnings or timeouts.`,
       ephemeral: true,
     });
   },

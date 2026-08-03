@@ -53,7 +53,7 @@ const DEFAULT_GUILD_CONFIG = {
 
   pingRole: null,
   pingProtectedUserId: null,
-  pingAllowedUsers: [], // users who can ping without warnings
+  pingAllowedRoles: [], // roles that can ping without warnings
 
   welcomeChannel: null,
   welcomeEnabled: false,
@@ -151,24 +151,26 @@ function markInvoiceClaimed(guildId, invoiceId, userId) {
   save('claimed_invoices', claimedInvoices);
 }
 
-function isPingAllowed(guildId, userId) {
+function isPingAllowed(guildId, member) {
   const cfg = getGuildConfig(guildId);
-  return (cfg.pingAllowedUsers || []).includes(userId);
+  const allowedRoles = cfg.pingAllowedRoles || [];
+  // Check if member has any of the allowed roles
+  return allowedRoles.some((roleId) => member.roles.cache.has(roleId));
 }
 
-function addPingAllow(guildId, userId) {
+function addPingAllowRole(guildId, roleId) {
   const cfg = getGuildConfig(guildId);
-  const allowed = cfg.pingAllowedUsers || [];
-  if (!allowed.includes(userId)) {
-    allowed.push(userId);
-    setGuildConfig(guildId, { pingAllowedUsers: allowed });
+  const allowed = cfg.pingAllowedRoles || [];
+  if (!allowed.includes(roleId)) {
+    allowed.push(roleId);
+    setGuildConfig(guildId, { pingAllowedRoles: allowed });
   }
 }
 
-function removePingAllow(guildId, userId) {
+function removePingAllowRole(guildId, roleId) {
   const cfg = getGuildConfig(guildId);
-  const allowed = (cfg.pingAllowedUsers || []).filter((id) => id !== userId);
-  setGuildConfig(guildId, { pingAllowedUsers: allowed });
+  const allowed = (cfg.pingAllowedRoles || []).filter((id) => id !== roleId);
+  setGuildConfig(guildId, { pingAllowedRoles: allowed });
 }
 
 module.exports = {
@@ -189,7 +191,7 @@ module.exports = {
   isInvoiceClaimed,
   markInvoiceClaimed,
   isPingAllowed,
-  addPingAllow,
-  removePingAllow,
+  addPingAllowRole,
+  removePingAllowRole,
 };
 
