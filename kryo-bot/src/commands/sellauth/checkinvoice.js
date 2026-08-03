@@ -33,15 +33,31 @@ module.exports = {
       const products = sellauth.getInvoiceProductNames(invoice);
       const created = invoice.created_at ? `<t:${Math.floor(new Date(invoice.created_at).getTime() / 1000)}:F>` : 'Unknown';
 
+      // Get stored invoice details from database
+      const invoiceDetails = storage.getInvoiceDetails(interaction.guild.id, invoiceId);
+      
+      // Extract customer info from invoice or stored data
+      const customerEmail = invoiceDetails?.customerEmail || invoice.email || invoice.customer_email || 'N/A';
+      const browser = invoiceDetails?.browser || 'N/A';
+      const isUsed = invoiceDetails ? 'Yes' : 'No';
+
       const embed = new EmbedBuilder()
         .setColor(STATUS_COLORS[status] || 0x5865f2)
         .setTitle(`Invoice #${invoice.id ?? invoiceId}`)
         .addFields(
-          { name: 'Status', value: status.charAt(0).toUpperCase() + status.slice(1), inline: true },
-          { name: 'Price', value: total !== null ? `$${total} ${invoice.currency || 'USD'}` : 'Unknown', inline: true },
-          { name: 'Product', value: products, inline: false },
-          { name: 'Date/Time', value: created, inline: false },
+          { name: '📊 Status', value: status.charAt(0).toUpperCase() + status.slice(1), inline: true },
+          { name: '💵 Price', value: total !== null ? `$${total} ${invoice.currency || 'USD'}` : 'Unknown', inline: true },
+          { name: '📦 Product', value: products, inline: false },
+          { name: '📅 Date/Time', value: created, inline: true },
+          { name: '✅ Invoice Used', value: isUsed, inline: true },
+          { name: '📧 Customer Email', value: customerEmail, inline: false },
+          { name: '🌐 Browser', value: browser, inline: true },
         );
+
+      if (invoiceDetails?.claimedAt) {
+        const claimedTime = `<t:${Math.floor(invoiceDetails.claimedAt / 1000)}:F>`;
+        embed.addFields({ name: '🔐 Claimed At', value: claimedTime, inline: true });
+      }
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err) {
@@ -53,3 +69,4 @@ module.exports = {
     }
   },
 };
+

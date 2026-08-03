@@ -199,7 +199,12 @@ async function handleSellauthClaimModal(interaction) {
     }
   }
 
-  storage.markInvoiceClaimed(interaction.guild.id, invoiceId, interaction.user.id);
+  // Mark invoice as claimed and store invoice details
+  storage.markInvoiceClaimed(interaction.guild.id, invoiceId, interaction.user.id, {
+    customerEmail: invoice.email || invoice.customer_email || 'N/A',
+    browser: invoice.user_agent || 'N/A',
+    invoice: invoice,
+  });
   storage.addClaimedRole(interaction.guild.id, interaction.user.id, tiers.map((t) => t.label).join(','));
 
   await interaction.editReply(given.length ? `Invoice verified! You've been given: ${given.join(', ')}` : 'Invoice verified, but I could not assign the role(s) - ask an admin to check my role position.');
