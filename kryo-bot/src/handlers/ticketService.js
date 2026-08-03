@@ -9,6 +9,7 @@ const {
 const storage = require('../utils/storage');
 const { memberInfoEmbed } = require('../utils/embeds');
 const { buildTranscript } = require('../utils/transcript');
+const { logError } = require('../utils/errorHandler');
 
 const TWENTY_EIGHT_DAYS_MS = 28 * 24 * 60 * 60 * 1000;
 
@@ -139,7 +140,7 @@ async function closeTicket(interaction, channel, ticket) {
     try {
       await channel.setParent(cfg.ticketDoneChannel, { lockPermissions: false });
     } catch (err) {
-      console.error('[ticket] failed to move channel to done category', err);
+      logError('ticket-move-to-done-category', err);
     }
   }
 
@@ -147,7 +148,15 @@ async function closeTicket(interaction, channel, ticket) {
   try {
     await channel.permissionOverwrites.edit(ticket.openerId, { SendMessages: false });
   } catch (err) {
-    // ignore
+    logError('ticket-remove-user-perms', err);
+  }
+
+  // Rename channel to "done-XXXX"
+  try {
+    const ticketNum = channel.name.match(/\d{4}$/)?.[0] || 'unknown';
+    await channel.setName(`done-${ticketNum}`);
+  } catch (err) {
+    logError('ticket-rename-to-done', err);
   }
 
   await channel.send({ content: 'This ticket has been closed/done please make a new ticket for more support' });
