@@ -19,91 +19,90 @@ module.exports = {
 
     try {
       const invoice = await sellauth.getInvoice(cfg.sellauthShopId, cfg.sellauthApiKey, invoiceId);
+      
+      // Safely extract all invoice data
       const status = (invoice.status || 'unknown').toLowerCase();
-      const total = sellauth.getInvoiceTotal(invoice);
-      const products = sellauth.getInvoiceProductNames(invoice);
+      const total = sellauth.getInvoiceTotal(invoice) || 'N/A';
+      const products = sellauth.getInvoiceProductNames(invoice) || 'N/A';
       const created = invoice.created_at ? new Date(invoice.created_at) : null;
       const completed = invoice.paid_at ? new Date(invoice.paid_at) : null;
 
       // Get stored invoice details from database
       const invoiceDetails = storage.getInvoiceDetails(interaction.guild.id, invoiceId);
 
-      // Extract customer info
-      const customerEmail = invoiceDetails?.customerEmail || invoice.email || invoice.customer_email || 'N/A';
-      
+      // Extract customer info - try multiple fields
+      let customerEmail = 'N/A';
+      if (invoiceDetails?.customerEmail && invoiceDetails.customerEmail !== 'N/A') {
+        customerEmail = invoiceDetails.customerEmail;
+      } else if (invoice.email) {
+        customerEmail = invoice.email;
+      } else if (invoice.customer_email) {
+        customerEmail = invoice.customer_email;
+      } else if (invoice.customer && invoice.customer.email) {
+        customerEmail = invoice.customer.email;
+      }
+
       // Handle payment method - could be string or object
       let paymentMethod = 'N/A';
       if (invoice.payment_method) {
         if (typeof invoice.payment_method === 'string') {
           paymentMethod = invoice.payment_method.toUpperCase();
-        } else if (invoice.payment_method.name) {
-          paymentMethod = invoice.payment_method.name.toUpperCase();
+        } else if (typeof invoice.payment_method === 'object' && invoice.payment_method.name) {
+          paymentMethod = String(invoice.payment_method.name).toUpperCase();
         }
       }
 
-      const isUsed = invoiceDetails ? 'Yes' : 'No';
+      const isUsed = invoiceDetails ? '✅ Claimed' : '⏳ Pending';
 
-      // Format dates to AUS timezone (AEST/AEDT)
-      const formatter = new Intl.DateTimeFormat('en-AU', {
-        timeZone: 'Australia/Sydney',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false,
-      });
+      // Format dates to AUS timezone with 12-hour format
+      const formatAusDate = (date) => {
+        if (!date) return 'N/A';
+        
+        const formatter = new Intl.DateTimeFormat('en-AU', {
+          timeZone: 'Australia/Sydney',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true,
+        });
 
-      const createdStr = created
-        ? (() => {
-            const parts = formatter.formatToParts(created);
-            const obj = {};
-            parts.forEach(({ type, value }) => {
-              obj[type] = value;
-            });
-            return `${obj.day}/${obj.month}/${obj.year} • ${obj.hour}:${obj.minute} AEST`;
-          })()
-        : 'N/A';
+        const formatted = formatter.format(date);
+        return formatted + ' AEST';
+      };
 
-      const completedStr = completed
-        ? (() => {
-            const parts = formatter.formatToParts(completed);
-            const obj = {};
-            parts.forEach(({ type, value }) => {
-              obj[type] = value;
-            });
-            return `${obj.day}/${obj.month}/${obj.year} • ${obj.hour}:${obj.minute} AEST`;
-          })()
-        : 'N/A';
+      const createdStr = formatAusDate(created);
+      const completedStr = formatAusDate(completed);
 
-      const statusEmoji = status === 'completed' || status === 'paid' ? '🟢' : status === 'pending' ? '🟡' : '🔴';
+      const statusEmoji = status === 'completed' || status === 'paid' ? '✅' : status === 'pending' ? '⏳' : '❌';
       const statusColor = status === 'completed' || status === 'paid' ? 0x2ecc71 : status === 'pending' ? 0xf39c12 : 0xe74c3c;
+      const statusText = status.charAt(0).toUpperCase() + status.slice(1);
 
       const embed = new EmbedBuilder()
         .setColor(statusColor)
-        .setTitle(`📄 Invoice #${invoice.id ?? invoiceId}`)
+        .setTitle(`📄 INVOICE #${invoice.id ?? invoiceId}`)
         .setThumbnail('https://cdn.corenexis.com/f/sDDySVJJAoW.webp')
         .addFields(
-          { name: '🛒 Product', value: products, inline: false },
-          { name: '💰 Total Price', value: total !== null ? `$${total} ${invoice.currency || 'USD'}` : 'N/A', inline: true },
-          { name: '📊 Status', value: `${statusEmoji} ${status.charAt(0).toUpperCase() + status.slice(1)}`, inline: true },
-          { name: '👤 Customer Email', value: customerEmail, inline: false },
-          { name: '💳 Payment Method', value: paymentMethod, inline: true },
-          { name: '🔑 Delivery Status', value: isUsed === 'Yes' ? 'Keys claimed by user' : 'Pending delivery', inline: true },
-          { name: '📅 Order Created (AUS)', value: createdStr, inline: true },
-          { name: '✅ Order Completed (AUS)', value: completedStr, inline: true },
+          { name: '🛍️ **PRODUCT**', value: `\`${products}\``, inline: false },
+          { name: '💰 **PRICE**', value: `\`$${total}\``, inline: true },
+          { name: '📊 **STATUS**', value: `\`${statusEmoji} ${statusText}\``, inline: true },
+          { name: '👤 **CUSTOMER EMAIL**', value: `\`${customerEmail}\``, inline: false },
+          { name: '💳 **PAYMENT METHOD**', value: `\`${paymentMethod}\``, inline: true },
+          { name: '🔑 **DELIVERY**', value: `\`${isUsed}\``, inline: true },
+          { name: '📅 **CREATED (AUS)**', value: `\`${createdStr}\``, inline: true },
+          { name: '✅ **COMPLETED (AUS)**', value: `\`${completedStr}\``, inline: true },
         )
-        .setFooter({ text: 'Thank you for your purchase!' })
+        .setFooter({ text: '✨ Thank you for your purchase!' })
         .setTimestamp();
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err) {
       if (err.response?.status === 404) {
-        return interaction.editReply(`No invoice found matching \`${invoiceId}\`.`);
+        return interaction.editReply(`❌ No invoice found matching \`${invoiceId}\`.`);
       }
       console.error('[checkinvoice]', err);
-      await interaction.editReply('Something went wrong contacting SellAuth. Double check the invoice ID and try again.');
+      await interaction.editReply('❌ Something went wrong contacting SellAuth. Double check the invoice ID and try again.');
     }
   },
 };
