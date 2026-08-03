@@ -25,8 +25,8 @@ module.exports = {
     // Someone protected pinging another protected person/role, or pinging themselves, isn't a violation
     if (message.member.roles.cache.has(cfg.pingRole)) return;
 
-    // Check if user is allowed to ping without warnings
-    if (storage.isPingAllowed(message.guild.id, message.author.id)) {
+    // Check if user's role is allowed to ping without warnings
+    if (storage.isPingAllowed(message.guild.id, message.member)) {
       return; // They're allowed, do nothing
     }
 
