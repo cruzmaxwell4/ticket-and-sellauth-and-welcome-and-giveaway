@@ -2,6 +2,9 @@ const fs = require('fs');
 const path = require('path');
 const { Client, GatewayIntentBits, Partials, Collection } = require('discord.js');
 const { BOT_TOKEN } = require('./config/env');
+const { logError } = require('./utils/errorHandler');
+const storage = require('./utils/storage');
+const { rehydrateGiveaways } = require('./handlers/giveawayService');
 
 const client = new Client({
   intents: [
@@ -29,24 +32,55 @@ function walk(dir) {
 // ---- load commands ----
 const commandsDir = path.join(__dirname, 'commands');
 for (const file of walk(commandsDir)) {
-  const command = require(file);
-  if (!command?.data || !command?.execute) {
-    console.warn(`[commands] Skipping ${file} - missing "data" or "execute" export.`);
-    continue;
+  try {
+    const command = require(file);
+    if (!command?.data || !command?.execute) {
+      console.warn(`[commands] Skipping ${file} - missing "data" or "execute" export.`);
+      continue;
+    }
+    client.commands.set(command.data.name, command);
+  } catch (err) {
+    logError('command-load', err, { file });
   }
-  client.commands.set(command.data.name, command);
 }
 console.log(`[commands] Loaded ${client.commands.size} command(s).`);
 
 // ---- load events ----
 const eventsDir = path.join(__dirname, 'events');
 for (const file of walk(eventsDir)) {
-  const event = require(file);
-  if (event.once) client.once(event.name, (...args) => event.execute(...args));
-  else client.on(event.name, (...args) => event.execute(...args));
+  try {
+    const event = require(file);
+    if (event.once) client.once(event.name, (...args) => event.execute(...args));
+    else client.on(event.name, (...args) => event.execute(...args));
+  } catch (err) {
+    logError('event-load', err, { file });
+  }
 }
 console.log('[events] Loaded event handlers.');
 
-process.on('unhandledRejection', (err) => console.error('[unhandledRejection]', err));
+// ---- Recovery on startup ----
+client.once('ready', () => {
+  console.log('[ready] Recovery pass starting...');
+  try {
+    // Rehydrate giveaways that should still be running
+    rehydrateGiveaways(client);
+    console.log('[ready] Giveaways rehydrated.');
+    
+    // You can add more recovery logic here
+  } catch (err) {
+    logError('recovery', err);
+  }
+});
+
+// ---- Global error handlers ----
+process.on('unhandledRejection', (err) => {
+  logError('unhandledRejection', err);
+});
+
+process.on('uncaughtException', (err) => {
+  logError('uncaughtException', err);
+  console.error('Bot encountered a critical error and may need to be restarted.');
+});
 
 client.login(BOT_TOKEN);
+

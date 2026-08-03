@@ -8,6 +8,7 @@ const storage = require('../utils/storage');
 const { isOwner, isSupport } = require('../utils/permissions');
 const sellauth = require('../utils/sellauth');
 const ticketService = require('../handlers/ticketService');
+const { logError, safeDiscordCall } = require('../utils/errorHandler');
 
 const OWNER_ONLY_MSG = 'Only the owner can use this button.';
 
@@ -17,7 +18,7 @@ async function handleChatInputCommand(interaction) {
   try {
     await command.execute(interaction);
   } catch (err) {
-    console.error(`[command] /${interaction.commandName} failed`, err);
+    logError(`command-/${interaction.commandName}`, err, { userId: interaction.user.id, guildId: interaction.guild?.id });
     const payload = { content: 'Something went wrong running that command.', ephemeral: true };
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(payload).catch(() => {});
@@ -61,7 +62,7 @@ async function handleTicketButton(interaction) {
       const member = await ticketService.wasteOfTime(interaction, ticket);
       return interaction.editReply(`${member.user.tag} has been timed out for 28 days.`);
     } catch (err) {
-      console.error('[ticket_waste]', err);
+      logError('ticket_waste', err);
       return interaction.editReply('Could not time out that member (missing permissions or role hierarchy issue).');
     }
   }
@@ -144,7 +145,7 @@ async function handleTicketGiveRoleSelect(interaction) {
     await member.roles.add(role);
     await interaction.reply({ content: `Gave ${role} to ${member}.`, ephemeral: true });
   } catch (err) {
-    console.error('[ticket_giverole_select]', err);
+    logError('ticket_giverole_select', err);
     await interaction.reply({ content: 'Could not give that role (check the bot role position/permissions).', ephemeral: true });
   }
 }
@@ -160,12 +161,12 @@ async function handleSellauthClaimModal(interaction) {
 
   let invoice;
   try {
-    invoice = await sellauth.getInvoice(cfg.sellauthShopId, cfg.sellauthApiKey, invoiceId);
+    invoice = await safeDiscordCall(() => sellauth.getInvoice(cfg.sellauthShopId, cfg.sellauthApiKey, invoiceId), 'sellauth-getInvoice');
   } catch (err) {
     return interaction.editReply('That invoice could not be found. Double check the ID and try again.');
   }
 
-  const status = (invoice.status || '').toLowerCase();
+  const status = (invoice?.status || '').toLowerCase();
   if (status !== 'completed' && status !== 'paid') {
     return interaction.editReply(`That invoice is not valid for a role claim (status: **${status || 'unknown'}**).`);
   }
@@ -194,7 +195,7 @@ async function handleSellauthClaimModal(interaction) {
       await member.roles.add(role);
       given.push(role.toString());
     } catch (err) {
-      console.error('[sellauth_claim_modal] role add failed', err);
+      logError('sellauth_claim_modal_role_add', err);
     }
   }
 
@@ -222,7 +223,7 @@ async function handleRestockModal(interaction) {
     await sellauth.appendDeliverables(cfg.sellauthShopId, cfg.sellauthApiKey, productId, lines);
     await interaction.editReply(`Added ${lines.length} new stock line(s) to product \`${productId}\`.`);
   } catch (err) {
-    console.error('[sellauth_restock_modal]', err);
+    logError('sellauth_restock_modal', err);
     await interaction.editReply(
       'Could not restock automatically (this product may use variants, which SellAuth restocks differently). Please restock it from the SellAuth dashboard instead.',
     );
@@ -252,7 +253,7 @@ module.exports = {
         if (interaction.customId.startsWith('sellauth_restock_modal_')) return handleRestockModal(interaction);
       }
     } catch (err) {
-      console.error('[interactionCreate] unhandled error', err);
+      logError('interactionCreate', err, { userId: interaction.user?.id, guildId: interaction.guild?.id });
       const payload = { content: 'Something went wrong.', ephemeral: true };
       if (interaction.deferred || interaction.replied) {
         await interaction.followUp(payload).catch(() => {});
@@ -262,3 +263,4 @@ module.exports = {
     }
   },
 };
+
