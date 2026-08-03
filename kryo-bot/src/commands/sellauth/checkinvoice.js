@@ -43,13 +43,38 @@ module.exports = {
 
       const isUsed = invoiceDetails ? 'Yes' : 'No';
 
-      // Format dates
+      // Format dates to AUS timezone (AEST/AEDT)
+      const formatter = new Intl.DateTimeFormat('en-AU', {
+        timeZone: 'Australia/Sydney',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+
       const createdStr = created
-        ? `${created.getDate().toString().padStart(2, '0')}/${(created.getMonth() + 1).toString().padStart(2, '0')}/${created.getFullYear()} • ${created.getHours().toString().padStart(2, '0')}:${created.getMinutes().toString().padStart(2, '0')} BST`
+        ? (() => {
+            const parts = formatter.formatToParts(created);
+            const obj = {};
+            parts.forEach(({ type, value }) => {
+              obj[type] = value;
+            });
+            return `${obj.day}/${obj.month}/${obj.year} • ${obj.hour}:${obj.minute} AEST`;
+          })()
         : 'N/A';
 
       const completedStr = completed
-        ? `${completed.getDate().toString().padStart(2, '0')}/${(completed.getMonth() + 1).toString().padStart(2, '0')}/${completed.getFullYear()} • ${completed.getHours().toString().padStart(2, '0')}:${completed.getMinutes().toString().padStart(2, '0')} BST`
+        ? (() => {
+            const parts = formatter.formatToParts(completed);
+            const obj = {};
+            parts.forEach(({ type, value }) => {
+              obj[type] = value;
+            });
+            return `${obj.day}/${obj.month}/${obj.year} • ${obj.hour}:${obj.minute} AEST`;
+          })()
         : 'N/A';
 
       const statusEmoji = status === 'completed' || status === 'paid' ? '🟢' : status === 'pending' ? '🟡' : '🔴';

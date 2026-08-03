@@ -15,6 +15,15 @@ const OWNER_ONLY_MSG = 'Only the owner can use this button.';
 async function handleChatInputCommand(interaction) {
   const command = interaction.client.commands.get(interaction.commandName);
   if (!command) return;
+
+  // Check command permissions - owner always allowed
+  if (!isOwner(interaction)) {
+    // Check if user has allowed role
+    if (!storage.canUseCommands(interaction.guild.id, interaction.member)) {
+      return interaction.reply({ content: 'You do not have permission to use bot commands.', ephemeral: true });
+    }
+  }
+
   try {
     await command.execute(interaction);
   } catch (err) {
