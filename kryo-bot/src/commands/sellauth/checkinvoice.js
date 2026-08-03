@@ -81,20 +81,18 @@ module.exports = {
 
       const embed = new EmbedBuilder()
         .setColor(statusColor)
-        .setTitle(`📄 INVOICE #${invoice.id ?? invoiceId}`)
+        .setTitle(`📄 **INVOICE #${invoice.id ?? invoiceId}**`)
         .setThumbnail('https://cdn.corenexis.com/f/sDDySVJJAoW.webp')
         .addFields(
-          { name: '🛍️ **PRODUCT**', value: `\`${products}\``, inline: false },
-          { name: '💰 **PRICE**', value: `\`$${total}\``, inline: true },
-          { name: '📊 **STATUS**', value: `\`${statusEmoji} ${statusText}\``, inline: true },
-          { name: '👤 **CUSTOMER EMAIL**', value: `\`${customerEmail}\``, inline: false },
-          { name: '💳 **PAYMENT METHOD**', value: `\`${paymentMethod}\``, inline: true },
-          { name: '🔑 **DELIVERY**', value: `\`${isUsed}\``, inline: true },
-          { name: '📅 **CREATED (AUS)**', value: `\`${createdStr}\``, inline: true },
-          { name: '✅ **COMPLETED (AUS)**', value: `\`${completedStr}\``, inline: true },
-        )
-        .setFooter({ text: '✨ Thank you for your purchase!' })
-        .setTimestamp();
+          { name: '🛍️ **PRODUCT**', value: `**${products}**`, inline: false },
+          { name: '💰 **PRICE**', value: `**$${total}**`, inline: true },
+          { name: '📊 **STATUS**', value: `**${statusEmoji} ${statusText}**`, inline: true },
+          { name: '👤 **CUSTOMER EMAIL**', value: `**${customerEmail}**`, inline: false },
+          { name: '💳 **PAYMENT METHOD**', value: `**${paymentMethod}**`, inline: true },
+          { name: '🔑 **DELIVERY**', value: `**${isUsed}**`, inline: true },
+          { name: '📅 **CREATED (AUS)**', value: `**${createdStr}**`, inline: true },
+          { name: '✅ **COMPLETED (AUS)**', value: `**${completedStr}**`, inline: true },
+        );
 
       await interaction.editReply({ embeds: [embed] });
     } catch (err) {
