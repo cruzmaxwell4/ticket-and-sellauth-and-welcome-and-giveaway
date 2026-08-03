@@ -91,10 +91,13 @@ async function openTicket(interaction) {
   const infoEmbed = memberInfoEmbed({
     member,
     title: 'New Ticket',
-    description: 'Hello how can we help u today? Please provide Invoice/Order ID (optional)',
   });
 
+  // Send member info embed with control buttons
   await channel.send({ embeds: [infoEmbed], components: [ticketControlRow()] });
+
+  // Send help message in bold as a separate message
+  await channel.send({ content: '**Hello how can we help u today? Please provide Invoice/Order ID (optional)**' });
 
   return channel;
 }
@@ -180,3 +183,4 @@ module.exports = {
   guildRoleSelectMenu,
   TWENTY_EIGHT_DAYS_MS,
 };
+
