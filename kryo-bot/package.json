@@ -5,6 +5,7 @@
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
+    "prestart": "node deploy-commands.js",
     "start": "node src/index.js",
     "deploy": "node deploy-commands.js"
   },
@@ -18,3 +19,4 @@
   },
   "license": "MIT"
 }
+
