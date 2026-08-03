@@ -1,4 +1,5 @@
 const storage = require('../utils/storage');
+const { logError } = require('../utils/errorHandler');
 
 const TIMEOUT_MS = 60 * 60 * 1000; // 1 hour timeout on the 3rd offending ping
 
@@ -34,10 +35,38 @@ module.exports = {
     // 3rd offense - timeout and reset the counter
     storage.resetWarning(message.guild.id, message.author.id);
     try {
+      // Check role hierarchy before attempting timeout
+      const botMember = await message.guild.members.fetchMe();
+      const botHighestRole = botMember.roles.highest;
+      const userHighestRole = message.member.roles.highest;
+
+      if (botHighestRole.position <= userHighestRole.position) {
+        logError('ping-protection-hierarchy', new Error('Bot role too low'), {
+          botRole: botHighestRole.name,
+          botRolePos: botHighestRole.position,
+          userRole: userHighestRole.name,
+          userRolePos: userHighestRole.position,
+          guildId: message.guild.id,
+        });
+        await message.reply(
+          `Dont ping owner Status: (Busy) Please wait we will be with u\n⚠️ I cannot timeout you because my role is not high enough. Ask an admin to move my role above yours.`,
+        );
+        return;
+      }
+
       await message.member.timeout(TIMEOUT_MS, 'Repeatedly pinged a protected role after 2 warnings');
-      await message.reply(`Dont ping owner Status: (Busy) Please wait we will be with u\nYou have been timed out for repeated pings.`);
+      await message.reply(
+        `Dont ping owner Status: (Busy) Please wait we will be with u\nYou have been timed out for 1 hour for repeated pings.`,
+      );
     } catch (err) {
-      console.error('[messageCreate] failed to timeout member for ping protection', err);
+      logError('ping-protection-timeout', err, {
+        userId: message.author.id,
+        guildId: message.guild.id,
+      });
+      await message.reply(
+        `Dont ping owner Status: (Busy) Please wait we will be with u\nError: Could not timeout (check bot permissions and role position).`,
+      ).catch(() => {});
     }
   },
 };
+
