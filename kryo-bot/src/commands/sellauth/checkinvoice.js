@@ -30,7 +30,17 @@ module.exports = {
 
       // Extract customer info
       const customerEmail = invoiceDetails?.customerEmail || invoice.email || invoice.customer_email || 'N/A';
-      const paymentMethod = (invoice.payment_method || 'N/A').toString().toUpperCase();
+      
+      // Handle payment method - could be string or object
+      let paymentMethod = 'N/A';
+      if (invoice.payment_method) {
+        if (typeof invoice.payment_method === 'string') {
+          paymentMethod = invoice.payment_method.toUpperCase();
+        } else if (invoice.payment_method.name) {
+          paymentMethod = invoice.payment_method.name.toUpperCase();
+        }
+      }
+
       const isUsed = invoiceDetails ? 'Yes' : 'No';
 
       // Format dates
@@ -44,34 +54,41 @@ module.exports = {
 
       const statusEmoji = status === 'completed' || status === 'paid' ? '🟢' : status === 'pending' ? '🟡' : '🔴';
 
-      const text = `📄 Invoice #${invoice.id ?? invoiceId}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🛒 **Product**
-${products}
+      const divider = '┌' + '─'.repeat(50) + '┐';
+      const dividerMid = '├' + '─'.repeat(50) + '┤';
+      const dividerEnd = '└' + '─'.repeat(50) + '┘';
 
-💰 **Total Price**
-${total !== null ? `$${total} ${invoice.currency || 'USD'}` : 'N/A'}
+      const text = `\`\`\`
+${divider}
+│ 📄 INVOICE #${invoice.id ?? invoiceId}${' '.repeat(Math.max(1, 47 - (invoice.id ?? invoiceId).length))}│
+${dividerMid}
+│ 🛒 PRODUCT                                                 │
+│ ${products.substring(0, 48).padEnd(48)}│
+${dividerMid}
+│ 💰 TOTAL PRICE                                             │
+│ ${(total !== null ? `$${total} ${invoice.currency || 'USD'}` : 'N/A').substring(0, 48).padEnd(48)}│
+${dividerMid}
+│ 👤 CUSTOMER EMAIL                                          │
+│ ${customerEmail.substring(0, 48).padEnd(48)}│
+${dividerMid}
+│ 💳 PAYMENT METHOD                                          │
+│ ${paymentMethod.substring(0, 48).padEnd(48)}│
+${dividerMid}
+│ 📅 ORDER CREATED                                           │
+│ ${createdStr.substring(0, 48).padEnd(48)}│
+${dividerMid}
+│ ✅ ORDER COMPLETED                                         │
+│ ${completedStr.substring(0, 48).padEnd(48)}│
+${dividerMid}
+│ 📊 CURRENT STATUS                                          │
+│ ${(statusEmoji + ' ' + status.charAt(0).toUpperCase() + status.slice(1)).substring(0, 48).padEnd(48)}│
+${dividerMid}
+│ 🔑 DELIVERY STATUS                                         │
+│ ${(isUsed === 'Yes' ? 'Keys claimed by user' : 'Pending delivery').substring(0, 48).padEnd(48)}│
+${dividerEnd}
 
-👤 **Customer**
-${customerEmail}
-
-💳 **Payment Method**
-${paymentMethod}
-
-📅 **Order Created**
-${createdStr}
-
-✅ **Order Completed**
-${completedStr}
-
-📊 **Current Status**
-${statusEmoji} ${status.charAt(0).toUpperCase() + status.slice(1)}
-
-🔑 **Delivery Status**
-${isUsed === 'Yes' ? 'Keys claimed by user' : 'Pending delivery'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Thank you for your purchase!`;
+Thank you for your purchase!
+\`\`\``;
 
       await interaction.editReply(text);
     } catch (err) {
