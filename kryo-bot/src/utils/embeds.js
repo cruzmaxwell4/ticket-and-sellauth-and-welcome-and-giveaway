@@ -16,28 +16,21 @@ function timeAgo(date) {
   return `${hours} hour${hours === 1 ? '' : 's'} ago`;
 }
 
-/** The "who opened this ticket" info block: username, id, pfp, account age, server age. Reused for welcome too. */
+/** The \"who opened this ticket\" info block: username, id, pfp, account age. Reused for welcome. */
 function memberInfoEmbed({ member, color = 0x2b2d31, title, description }) {
   const user = member.user;
-  const joinedAt = member.joinedAt;
   const embed = new EmbedBuilder()
     .setColor(color)
     .setThumbnail(user.displayAvatarURL({ size: 256 }))
     .addFields(
-      { name: 'Username', value: `${user.tag}`, inline: true },
-      { name: 'User ID', value: `${user.id}`, inline: true },
+      { name: '**👤 USERNAME**', value: `**${user.tag}**`, inline: true },
+      { name: '**🆔 USER ID**', value: `**${user.id}**`, inline: true },
       { name: '\u200b', value: '\u200b', inline: true },
       {
-        name: 'Account Created',
-        value: `<t:${Math.floor(user.createdTimestamp / 1000)}:D> (${timeAgo(user.createdAt)})`,
-        inline: true,
+        name: '**📅 ACCOUNT CREATED**',
+        value: `**<t:${Math.floor(user.createdTimestamp / 1000)}:D>** (${timeAgo(user.createdAt)})`,
+        inline: false,
       },
-      {
-        name: 'In Server For',
-        value: joinedAt ? `<t:${Math.floor(joinedAt.getTime() / 1000)}:D> (${timeAgo(joinedAt)})` : 'Unknown',
-        inline: true,
-      },
-      { name: '\u200b', value: '\u200b', inline: true },
     );
   if (title) embed.setTitle(title);
   if (description) embed.setDescription(description);
@@ -54,3 +47,4 @@ function ticketPanelEmbed(guildConfig) {
 }
 
 module.exports = { memberInfoEmbed, ticketPanelEmbed, timeAgo };
+
