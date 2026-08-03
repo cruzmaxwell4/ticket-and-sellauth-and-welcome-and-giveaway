@@ -19,7 +19,7 @@ module.exports = {
     }
 
     await interaction.deferReply({ ephemeral: true });
-    const msg = buildWelcomeMessage(interaction.member);
+    const msg = buildWelcomeMessage(interaction.member, interaction.guild);
     await channel.send(msg);
     await interaction.editReply({ content: `Test welcome message sent to ${channel}.` });
   },
