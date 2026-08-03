@@ -30,7 +30,7 @@ module.exports = {
 
       // Extract customer info
       const customerEmail = invoiceDetails?.customerEmail || invoice.email || invoice.customer_email || 'N/A';
-      const paymentMethod = invoice.payment_method || 'N/A';
+      const paymentMethod = (invoice.payment_method || 'N/A').toString().toUpperCase();
       const isUsed = invoiceDetails ? 'Yes' : 'No';
 
       // Format dates
@@ -56,7 +56,7 @@ ${total !== null ? `$${total} ${invoice.currency || 'USD'}` : 'N/A'}
 ${customerEmail}
 
 💳 **Payment Method**
-${paymentMethod.toUpperCase()}
+${paymentMethod}
 
 📅 **Order Created**
 ${createdStr}
