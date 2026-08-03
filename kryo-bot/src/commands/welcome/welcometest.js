@@ -18,8 +18,10 @@ module.exports = {
       return interaction.reply({ content: 'Configured welcome channel no longer exists.', ephemeral: true });
     }
 
+    await interaction.deferReply({ ephemeral: true });
     const msg = buildWelcomeMessage(interaction.member);
     await channel.send(msg);
-    await interaction.reply({ content: `Test welcome message sent to ${channel}.`, ephemeral: true });
+    await interaction.editReply({ content: `Test welcome message sent to ${channel}.` });
   },
 };
+

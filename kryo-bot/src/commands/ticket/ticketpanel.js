@@ -10,8 +10,10 @@ module.exports = {
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
 
   async execute(interaction) {
+    await interaction.deferReply({ ephemeral: true });
     const cfg = storage.getGuildConfig(interaction.guild.id);
     await interaction.channel.send({ embeds: [ticketPanelEmbed(cfg)], components: [panelRow()] });
-    await interaction.reply({ content: 'Ticket panel sent.', ephemeral: true });
+    await interaction.editReply({ content: 'Ticket panel sent.' });
   },
 };
+
