@@ -1,4 +1,4 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 const storage = require('../../utils/storage');
 const sellauth = require('../../utils/sellauth');
 
@@ -78,44 +78,26 @@ module.exports = {
         : 'N/A';
 
       const statusEmoji = status === 'completed' || status === 'paid' ? '🟢' : status === 'pending' ? '🟡' : '🔴';
+      const statusColor = status === 'completed' || status === 'paid' ? 0x2ecc71 : status === 'pending' ? 0xf39c12 : 0xe74c3c;
 
-      const divider = '┌' + '─'.repeat(50) + '┐';
-      const dividerMid = '├' + '─'.repeat(50) + '┤';
-      const dividerEnd = '└' + '─'.repeat(50) + '┘';
+      const embed = new EmbedBuilder()
+        .setColor(statusColor)
+        .setTitle(`📄 Invoice #${invoice.id ?? invoiceId}`)
+        .setThumbnail('https://cdn.corenexis.com/f/sDDySVJJAoW.webp')
+        .addFields(
+          { name: '🛒 Product', value: products, inline: false },
+          { name: '💰 Total Price', value: total !== null ? `$${total} ${invoice.currency || 'USD'}` : 'N/A', inline: true },
+          { name: '📊 Status', value: `${statusEmoji} ${status.charAt(0).toUpperCase() + status.slice(1)}`, inline: true },
+          { name: '👤 Customer Email', value: customerEmail, inline: false },
+          { name: '💳 Payment Method', value: paymentMethod, inline: true },
+          { name: '🔑 Delivery Status', value: isUsed === 'Yes' ? 'Keys claimed by user' : 'Pending delivery', inline: true },
+          { name: '📅 Order Created (AUS)', value: createdStr, inline: true },
+          { name: '✅ Order Completed (AUS)', value: completedStr, inline: true },
+        )
+        .setFooter({ text: 'Thank you for your purchase!' })
+        .setTimestamp();
 
-      const text = `\`\`\`
-${divider}
-│ 📄 INVOICE #${invoice.id ?? invoiceId}${' '.repeat(Math.max(1, 47 - (invoice.id ?? invoiceId).length))}│
-${dividerMid}
-│ 🛒 PRODUCT                                                 │
-│ ${products.substring(0, 48).padEnd(48)}│
-${dividerMid}
-│ 💰 TOTAL PRICE                                             │
-│ ${(total !== null ? `$${total} ${invoice.currency || 'USD'}` : 'N/A').substring(0, 48).padEnd(48)}│
-${dividerMid}
-│ 👤 CUSTOMER EMAIL                                          │
-│ ${customerEmail.substring(0, 48).padEnd(48)}│
-${dividerMid}
-│ 💳 PAYMENT METHOD                                          │
-│ ${paymentMethod.substring(0, 48).padEnd(48)}│
-${dividerMid}
-│ 📅 ORDER CREATED                                           │
-│ ${createdStr.substring(0, 48).padEnd(48)}│
-${dividerMid}
-│ ✅ ORDER COMPLETED                                         │
-│ ${completedStr.substring(0, 48).padEnd(48)}│
-${dividerMid}
-│ 📊 CURRENT STATUS                                          │
-│ ${(statusEmoji + ' ' + status.charAt(0).toUpperCase() + status.slice(1)).substring(0, 48).padEnd(48)}│
-${dividerMid}
-│ 🔑 DELIVERY STATUS                                         │
-│ ${(isUsed === 'Yes' ? 'Keys claimed by user' : 'Pending delivery').substring(0, 48).padEnd(48)}│
-${dividerEnd}
-
-Thank you for your purchase!
-\`\`\``;
-
-      await interaction.editReply(text);
+      await interaction.editReply({ embeds: [embed] });
     } catch (err) {
       if (err.response?.status === 404) {
         return interaction.editReply(`No invoice found matching \`${invoiceId}\`.`);
