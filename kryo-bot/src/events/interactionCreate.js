@@ -10,17 +10,36 @@ const sellauth = require('../utils/sellauth');
 const ticketService = require('../handlers/ticketService');
 const { logError, safeDiscordCall } = require('../utils/errorHandler');
 
-const OWNER_ONLY_MSG = 'Only the owner can use this button.';
+const OWNER_ONLY_MSG = 'Only the owner can use this command.';
 
 async function handleChatInputCommand(interaction) {
   const command = interaction.client.commands.get(interaction.commandName);
   if (!command) return;
 
-  // Check command permissions - owner always allowed
-  if (!isOwner(interaction)) {
-    // Check if user has allowed role
-    if (!storage.canUseCommands(interaction.guild.id, interaction.member)) {
-      return interaction.reply({ content: 'You do not have permission to use bot commands.', ephemeral: true });
+  // Public commands (everyone can use)
+  const publicCommands = ['checkinvoice'];
+  
+  // Staff commands
+  const staffCommands = ['tickettranscript'];
+
+  // Owner-only commands (default)
+  const ownerOnlyCommands = [
+    'ticket', 'ticketchannel', 'ticketpingroles', 'tickettrans', 'ticketdone',
+    'sellauthshopid', 'sellauthapi', 'sellauthrole', 'restocksellauthproduct',
+    'pingrole', 'pingroleallow', 'bigrolescommands', 'giveaway', 'welcome'
+  ];
+
+  // Check command permissions
+  if (!publicCommands.includes(interaction.commandName)) {
+    if (staffCommands.includes(interaction.commandName)) {
+      if (!isSupport(interaction, storage.getGuildConfig(interaction.guild.id))) {
+        return interaction.reply({ content: 'Only staff can use this command.', ephemeral: true });
+      }
+    } else {
+      // All other commands are owner-only
+      if (!isOwner(interaction)) {
+        return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+      }
     }
   }
 
