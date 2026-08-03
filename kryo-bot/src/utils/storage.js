@@ -54,6 +54,8 @@ const DEFAULT_GUILD_CONFIG = {
   pingRole: null,
   pingProtectedUserId: null,
   pingAllowedRoles: [], // roles that can ping without warnings
+  
+  commandAllowRoles: [], // roles allowed to use bot commands (max 5)
 
   welcomeChannel: null,
   welcomeEnabled: false,
@@ -184,6 +186,22 @@ function removePingAllowRole(guildId, roleId) {
   setGuildConfig(guildId, { pingAllowedRoles: allowed });
 }
 
+function canUseCommands(guildId, member) {
+  const cfg = getGuildConfig(guildId);
+  const allowedRoles = cfg.commandAllowRoles || [];
+  // If no roles are set, only owner can use commands (handled by permissions.js)
+  if (allowedRoles.length === 0) return false;
+  // Check if member has any of the allowed roles
+  return allowedRoles.some((roleId) => member.roles.cache.has(roleId));
+}
+
+function setCommandAllowRoles(guildId, roleIds) {
+  // Limit to 5 roles
+  const limited = roleIds.slice(0, 5);
+  setGuildConfig(guildId, { commandAllowRoles: limited });
+  return limited;
+}
+
 module.exports = {
   getGuildConfig,
   setGuildConfig,
@@ -205,5 +223,7 @@ module.exports = {
   isPingAllowed,
   addPingAllowRole,
   removePingAllowRole,
+  canUseCommands,
+  setCommandAllowRoles,
 };
 
