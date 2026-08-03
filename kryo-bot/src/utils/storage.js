@@ -34,7 +34,7 @@ const tickets = load('tickets', {});
 const warnings = load('warnings', {});
 const giveaways = load('giveaways', {});
 const customers = load('customers', {}); // sellauth role-claim tracking
-const claimedInvoices = load('claimed_invoices', {}); // prevents the same invoice being redeemed twice
+const claimedInvoices = load('claimed_invoices', {}); // prevents the same invoice being redeemed twice + stores details
 
 const DEFAULT_GUILD_CONFIG = {
   ticketImage: null,
@@ -146,8 +146,19 @@ function isInvoiceClaimed(guildId, invoiceId) {
   return Boolean(claimedInvoices[`${guildId}-${invoiceId}`]);
 }
 
-function markInvoiceClaimed(guildId, invoiceId, userId) {
-  claimedInvoices[`${guildId}-${invoiceId}`] = { userId, claimedAt: Date.now() };
+function getInvoiceDetails(guildId, invoiceId) {
+  return claimedInvoices[`${guildId}-${invoiceId}`] || null;
+}
+
+function markInvoiceClaimed(guildId, invoiceId, userId, invoiceData = {}) {
+  const key = `${guildId}-${invoiceId}`;
+  claimedInvoices[key] = {
+    userId,
+    claimedAt: Date.now(),
+    customerEmail: invoiceData.customerEmail || invoiceData.email || 'N/A',
+    browser: invoiceData.browser || invoiceData.userAgent || 'N/A',
+    invoiceData: invoiceData, // store full invoice data for reference
+  };
   save('claimed_invoices', claimedInvoices);
 }
 
@@ -189,6 +200,7 @@ module.exports = {
   getClaimedRoles,
   addClaimedRole,
   isInvoiceClaimed,
+  getInvoiceDetails,
   markInvoiceClaimed,
   isPingAllowed,
   addPingAllowRole,
