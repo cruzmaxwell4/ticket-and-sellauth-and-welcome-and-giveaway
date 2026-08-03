@@ -53,6 +53,7 @@ const DEFAULT_GUILD_CONFIG = {
 
   pingRole: null,
   pingProtectedUserId: null,
+  pingAllowedUsers: [], // users who can ping without warnings
 
   welcomeChannel: null,
   welcomeEnabled: false,
@@ -150,6 +151,26 @@ function markInvoiceClaimed(guildId, invoiceId, userId) {
   save('claimed_invoices', claimedInvoices);
 }
 
+function isPingAllowed(guildId, userId) {
+  const cfg = getGuildConfig(guildId);
+  return (cfg.pingAllowedUsers || []).includes(userId);
+}
+
+function addPingAllow(guildId, userId) {
+  const cfg = getGuildConfig(guildId);
+  const allowed = cfg.pingAllowedUsers || [];
+  if (!allowed.includes(userId)) {
+    allowed.push(userId);
+    setGuildConfig(guildId, { pingAllowedUsers: allowed });
+  }
+}
+
+function removePingAllow(guildId, userId) {
+  const cfg = getGuildConfig(guildId);
+  const allowed = (cfg.pingAllowedUsers || []).filter((id) => id !== userId);
+  setGuildConfig(guildId, { pingAllowedUsers: allowed });
+}
+
 module.exports = {
   getGuildConfig,
   setGuildConfig,
@@ -167,5 +188,8 @@ module.exports = {
   addClaimedRole,
   isInvoiceClaimed,
   markInvoiceClaimed,
+  isPingAllowed,
+  addPingAllow,
+  removePingAllow,
 };
 
