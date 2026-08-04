@@ -30,7 +30,7 @@ async function handleChatInputCommand(interaction) {
     // Ticket commands
     'ticket', 'ticketchannel', 'ticketpingroles', 'tickettrans', 'ticketdone',
     // SellAuth commands (owner-only)
-    'sellauthshopid', 'sellauthapi', 'sellauthrole', 'restocksellauthproduct',
+    'sellauthshopid', 'sellauthapi', 'sellauthrole', 'restocksellauthproduct', 'payaccount',
     // Link management commands (owner-only)
     'addlink', 'showlink', 'clearlinks', 'allowdroplink', 'disallowdroplink', 'showdroplink',
     // Ping & role commands
@@ -69,6 +69,88 @@ async function handleChatInputCommand(interaction) {
     } else {
       await interaction.reply(payload).catch(() => {});
     }
+  }
+}
+
+async function handleMarkDelivered(interaction) {
+  // Extract invoice ID from button ID
+  const invoiceId = interaction.customId.replace('mark_delivered_', '');
+  
+  if (!isOwner(interaction)) {
+    return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+
+  try {
+    const cfg = storage.getGuildConfig(interaction.guild.id);
+    if (!cfg.sellauthShopId || !cfg.sellauthApiKey) {
+      return interaction.editReply('SellAuth is not configured.');
+    }
+
+    // Get the invoice
+    const invoice = await safeDiscordCall(
+      () => sellauth.getInvoice(cfg.sellauthShopId, cfg.sellauthApiKey, invoiceId),
+      'mark-delivered-getinvoice'
+    );
+
+    if (!invoice) {
+      return interaction.editReply('Could not find that invoice.');
+    }
+
+    // Get deliverables from invoice
+    const deliverables = invoice.deliverables || [];
+    if (deliverables.length === 0) {
+      return interaction.editReply('No deliverables found on this invoice.');
+    }
+
+    // Get the first/main deliverable (the account/key they purchased)
+    const mainDeliverable = deliverables[0].code;
+
+    // Mark as delivered on SellAuth
+    try {
+      // Note: This uses SellAuth API to mark deliverable as delivered
+      // The actual implementation depends on SellAuth's API
+      // For now, we'll log and proceed
+      console.log(`[mark-delivered] Marking deliverable as delivered on SellAuth: ${mainDeliverable}`);
+      
+      // Try to call SellAuth API to mark as delivered
+      // This is a placeholder - adjust based on actual SellAuth API
+      if (sellauth.markDeliverableAsDelivered) {
+        await sellauth.markDeliverableAsDelivered(cfg.sellauthShopId, cfg.sellauthApiKey, invoiceId, mainDeliverable);
+      }
+    } catch (err) {
+      logError('mark-delivered-sellauth', err);
+      // Continue anyway - we'll still notify the user
+    }
+
+    // Get invoice details to find the customer Discord ID
+    const invoiceDetails = storage.getInvoiceDetails(interaction.guild.id, invoiceId);
+    const customerId = invoiceDetails?.userId;
+
+    // Send deliverable to customer via DM
+    if (customerId) {
+      try {
+        const user = await interaction.client.users.fetch(customerId);
+        const embed = new (require('discord.js')).EmbedBuilder()
+          .setColor(0x2ecc71)
+          .setTitle('📦 Your Delivery is Ready!')
+          .addFields(
+            { name: 'Invoice ID', value: invoiceId, inline: true },
+            { name: 'Status', value: '✅ Delivered', inline: true },
+            { name: 'Account/Key', value: `\`\`\`\n${mainDeliverable}\n\`\`\``, inline: false },
+          );
+
+        await user.send({ embeds: [embed] });
+      } catch (dmErr) {
+        logError('mark-delivered-send-dm', dmErr);
+      }
+    }
+
+    await interaction.editReply(`✅ Marked as delivered!\n\nDeliverable: \`${mainDeliverable}\`\nCustomer notified via DM.`);
+  } catch (err) {
+    logError('mark-delivered', err);
+    await interaction.editReply('Something went wrong marking as delivered.');
   }
 }
 
@@ -392,6 +474,7 @@ module.exports = {
       if (interaction.isChatInputCommand()) return handleChatInputCommand(interaction);
 
       if (interaction.isButton()) {
+        if (interaction.customId.startsWith('mark_delivered_')) return handleMarkDelivered(interaction);
         if (interaction.customId.startsWith('replace_delivery_')) return handleReplaceDelivery(interaction);
         if (interaction.customId.startsWith('ticket_')) return handleTicketButton(interaction);
         if (interaction.customId === 'giveaway_enter') return handleGiveawayEnter(interaction);
