@@ -178,7 +178,7 @@ async function closeTicket(interaction, channel, ticket) {
       .setTitle('✅ Ticket Closed')
       .setDescription('This ticket has been closed/done please make a new ticket for more support.')
       .addFields(
-        { name: '⏱️ Channel Deletion Timer', value: '2 hours (7200 seconds)', inline: false },
+        { name: '⏱️ Channel Deletion Timer', value: '120 minutes', inline: false },
         { name: '📝 Transcript', value: 'Sent to transcript channel & your DM', inline: false },
         { name: '📋 Review', value: '[Leave us feedback](https://discord.com/channels/1501358367153852687/1531526946226307152)', inline: false }
       );
@@ -207,9 +207,9 @@ function scheduleChannelDeletion(channel, ticket) {
       const elapsed = Date.now() - (countdownMessages.get(channel.id)?.startTime || Date.now());
       remainingTime = Math.max(0, TWO_HOURS_MS - elapsed);
 
-      const hours = Math.floor(remainingTime / 3600000);
-      const minutes = Math.floor((remainingTime % 3600000) / 60000);
-      const seconds = Math.floor((remainingTime % 60000) / 1000);
+      const totalMinutes = Math.ceil(remainingTime / 60000);
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
 
       const countdownData = countdownMessages.get(channel.id);
       if (countdownData && countdownData.message) {
@@ -218,7 +218,7 @@ function scheduleChannelDeletion(channel, ticket) {
           .setTitle('✅ Ticket Closed')
           .setDescription('This ticket has been closed/done please make a new ticket for more support.')
           .addFields(
-            { name: '⏱️ Channel Deletion Timer', value: `${hours}h ${minutes}m ${seconds}s remaining`, inline: false },
+            { name: '⏱️ Channel Deletion Timer', value: `${hours}h ${minutes}m remaining`, inline: false },
             { name: '📝 Transcript', value: 'Sent to transcript channel & your DM', inline: false },
             { name: '📋 Review', value: '[Leave us feedback](https://discord.com/channels/1501358367153852687/1531526946226307152)', inline: false }
           );
@@ -234,8 +234,8 @@ function scheduleChannelDeletion(channel, ticket) {
     }
   };
 
-  // Update countdown every 10 seconds
-  updateInterval = setInterval(updateCountdown, 10000);
+  // Update countdown every 60 seconds (1 minute)
+  updateInterval = setInterval(updateCountdown, 60000);
 
   // Schedule deletion after 2 hours
   const timeoutId = setTimeout(async () => {
