@@ -35,6 +35,7 @@ const warnings = load('warnings', {});
 const giveaways = load('giveaways', {});
 const customers = load('customers', {}); // sellauth lifetime spending tracking: {guildId-userId: totalSpent}
 const claimedInvoices = load('claimed_invoices', {}); // prevents the same invoice being redeemed twice + stores details
+const links = load('links', {}); // link storage: {guildId: [link1, link2, ...]}
 
 const DEFAULT_GUILD_CONFIG = {
   ticketImage: null,
@@ -170,6 +171,32 @@ function markInvoiceClaimed(guildId, invoiceId, userId, invoiceData = {}) {
   save('claimed_invoices', claimedInvoices);
 }
 
+// Link management
+function getLinks(guildId) {
+  return links[guildId] || [];
+}
+
+function addLink(guildId, link) {
+  if (!links[guildId]) links[guildId] = [];
+  links[guildId].push(link);
+  save('links', links);
+  return links[guildId].length;
+}
+
+function dropLink(guildId) {
+  if (!links[guildId] || links[guildId].length === 0) {
+    return null; // No links available
+  }
+  const dropped = links[guildId].shift(); // Remove first link
+  save('links', links);
+  return dropped;
+}
+
+function clearLinks(guildId) {
+  links[guildId] = [];
+  save('links', links);
+}
+
 function isPingAllowed(guildId, member) {
   const cfg = getGuildConfig(guildId);
   const allowedRoles = cfg.pingAllowedRoles || [];
@@ -226,6 +253,10 @@ module.exports = {
   isInvoiceClaimed,
   getInvoiceDetails,
   markInvoiceClaimed,
+  getLinks,
+  addLink,
+  dropLink,
+  clearLinks,
   isPingAllowed,
   addPingAllowRole,
   removePingAllowRole,

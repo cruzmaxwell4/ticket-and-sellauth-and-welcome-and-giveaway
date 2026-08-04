@@ -22,12 +22,14 @@ async function handleChatInputCommand(interaction) {
   // Staff commands
   const staffCommands = ['tickettranscript'];
 
-  // Owner-only commands: ALL sellauth commands + admin commands
+  // Owner-only commands: ALL sellauth commands + admin/link commands
   const ownerOnlyCommands = [
     // Ticket commands
     'ticket', 'ticketchannel', 'ticketpingroles', 'tickettrans', 'ticketdone',
     // SellAuth commands (owner-only)
     'sellauthshopid', 'sellauthapi', 'sellauthrole', 'restocksellauthproduct',
+    // Link management commands (owner-only)
+    'addlink', 'droplink', 'showlink', 'clearlinks',
     // Ping & role commands
     'pingrole', 'pingroleallow', 'bigrolescommands',
     // Utility commands
@@ -41,7 +43,7 @@ async function handleChatInputCommand(interaction) {
         return interaction.reply({ content: 'Only staff can use this command.', ephemeral: true });
       }
     } else {
-      // All other commands are owner-only (including ALL sellauth commands)
+      // All other commands are owner-only
       if (!isOwner(interaction)) {
         return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
       }
