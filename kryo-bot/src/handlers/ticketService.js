@@ -81,6 +81,7 @@ async function openTicket(interaction) {
     claimedBy: null,
     closed: false,
     createdAt: Date.now(),
+    hasResponded: false, // Flag to track if we've sent the auto-response yet
   });
 
   await interaction.reply({ content: `Your ticket has been created: ${channel}`, ephemeral: true });
@@ -180,7 +181,7 @@ function scheduleChannelDeletion(channel, ticket) {
     try {
       // Send final transcript before deletion
       await sendTranscript({ guild: channel.guild }, channel, ticket);
-      
+
       // Delete the channel
       await channel.delete('Auto-deleted after 2 hours (ticket closure)');
       console.log(`[ticketService] Deleted done channel: ${channel.name}`);
