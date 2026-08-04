@@ -221,38 +221,20 @@ async function handleSellauthClaimModal(interaction) {
 
   const member = await interaction.guild.members.fetch(interaction.user.id);
   const given = [];
-  const removed = [];
-  
-  // Get all tiers the user should have
-  const tierRoleIds = new Set(tiers.map((t) => t.roleId));
-  
-  // Add new roles and remove old ones they don't qualify for anymore
-  const allTiers = [
-    { min: 300, roleId: cfg.sellauthRole300, label: '$300+' },
-    { min: 50, roleId: cfg.sellauthRole50, label: '$50+' },
-    { min: 1, roleId: cfg.sellauthRole1, label: '$1+' },
-  ].filter((t) => t.roleId);
 
-  for (const tier of allTiers) {
+  // Only add new roles - keep all old roles
+  for (const tier of tiers) {
     const role = interaction.guild.roles.cache.get(tier.roleId);
     if (!role) continue;
 
     const hasRole = member.roles.cache.has(tier.roleId);
-    const shouldHave = tierRoleIds.has(tier.roleId);
 
-    if (shouldHave && !hasRole) {
+    if (!hasRole) {
       try {
         await member.roles.add(role);
         given.push(role.toString());
       } catch (err) {
         logError('sellauth_claim_modal_role_add', err);
-      }
-    } else if (!shouldHave && hasRole) {
-      try {
-        await member.roles.remove(role);
-        removed.push(role.toString());
-      } catch (err) {
-        logError('sellauth_claim_modal_role_remove', err);
       }
     }
   }
@@ -266,8 +248,11 @@ async function handleSellauthClaimModal(interaction) {
   });
 
   let response = `Invoice verified! Your total lifetime spending: **$${lifetimeTotal}**`;
-  if (given.length > 0) response += `\nGained roles: ${given.join(', ')}`;
-  if (removed.length > 0) response += `\nRemoved roles: ${removed.join(', ')}`;
+  if (given.length > 0) {
+    response += `\nGained roles: ${given.join(', ')}`;
+  } else {
+    response += `\nYou already have all roles for your spending tier.`;
+  }
 
   await interaction.editReply(response);
 }
