@@ -18,6 +18,23 @@ module.exports = {
   async execute(message) {
     if (!message.guild || message.author.bot || !message.member) return;
 
+    // Handle ticket first message auto-response
+    const ticket = storage.getTicket(message.channelId);
+    if (ticket && ticket.openerId === message.author.id && !ticket.hasResponded) {
+      // Mark that the opener has sent their first message
+      storage.setTicket(message.channelId, { hasResponded: true });
+      
+      try {
+        await message.reply({ content: '**Ok we understand support will be with u soon**' });
+      } catch (err) {
+        logError('ticket-auto-response', err, {
+          channelId: message.channelId,
+          guildId: message.guild.id,
+        });
+      }
+    }
+
+    // Handle ping protection
     const cfg = storage.getGuildConfig(message.guild.id);
     if (!cfg.pingRole) return;
     if (!messageTargetsProtected(message, cfg)) return;
