@@ -165,8 +165,8 @@ async function closeTicket(interaction, channel, ticket) {
     logError('ticket-rename-to-done', err);
   }
 
-  // Send closure message in bold
-  await channel.send({ content: '**This ticket has been closed/done please make a new ticket for more support. Channel will be deleted in 2 Hours**' });
+  // Send closure message in bold with review link
+  await channel.send({ content: '**This ticket has been closed/done please make a new ticket for more support. Channel will be deleted in 2 Hours, Don\'t forgot to leave https://discord.com/channels/1501358367153852687/1531526946226307152**' });
 
   // Schedule channel deletion after 2 hours
   scheduleChannelDeletion(channel, ticket);
