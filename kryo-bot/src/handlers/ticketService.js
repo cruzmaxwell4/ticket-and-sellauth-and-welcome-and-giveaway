@@ -47,7 +47,7 @@ async function openTicket(interaction) {
     const chan = guild.channels.cache.get(ticket.channelId);
     if (chan) {
       // Found an open ticket channel that still exists
-      return interaction.reply({ content: `You already have 1 open ticket: ${chan}. Close it first before opening a new one.`, ephemeral: true });
+      return interaction.reply({ content: `You already have 1 open ticket: ${chan.name}. Ask owner to Close it first before opening a new one.`, ephemeral: true });
     }
   }
 
