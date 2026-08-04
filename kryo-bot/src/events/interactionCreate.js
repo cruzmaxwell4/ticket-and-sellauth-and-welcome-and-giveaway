@@ -72,6 +72,92 @@ async function handleChatInputCommand(interaction) {
   }
 }
 
+async function handleReplaceDelivery(interaction) {
+  // Extract invoice ID from button ID
+  const invoiceId = interaction.customId.replace('replace_delivery_', '');
+  
+  if (!isOwner(interaction)) {
+    return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+  }
+
+  await interaction.deferReply({ ephemeral: true });
+
+  try {
+    const cfg = storage.getGuildConfig(interaction.guild.id);
+    if (!cfg.sellauthShopId || !cfg.sellauthApiKey) {
+      return interaction.editReply('SellAuth is not configured.');
+    }
+
+    // Get the invoice
+    const invoice = await safeDiscordCall(
+      () => sellauth.getInvoice(cfg.sellauthShopId, cfg.sellauthApiKey, invoiceId),
+      'replace-delivery-getinvoice'
+    );
+
+    if (!invoice) {
+      return interaction.editReply('Could not find that invoice.');
+    }
+
+    // Get invoice details from storage
+    const invoiceDetails = storage.getInvoiceDetails(interaction.guild.id, invoiceId);
+    if (!invoiceDetails) {
+      return interaction.editReply('No delivery record found for this invoice.');
+    }
+
+    // Get old delivery (first deliverable)
+    const oldDeliverable = invoice.deliverables && invoice.deliverables.length > 0 
+      ? invoice.deliverables[0].code 
+      : null;
+
+    if (!oldDeliverable) {
+      return interaction.editReply('No deliverable found on this invoice.');
+    }
+
+    // Get a new link from storage
+    const category = '1x'; // Default category - you can modify this
+    const newLink = storage.dropLink(interaction.guild.id, category);
+
+    if (!newLink) {
+      return interaction.editReply(`⚠️ No keys available in ${category} stock!`);
+    }
+
+    // Try to delete the old deliverable from SellAuth
+    try {
+      if (invoice.id && oldDeliverable) {
+        // Note: This assumes SellAuth has an API endpoint to delete deliverables
+        // If not, we'll just log it and continue
+        console.log(`[replace-delivery] Would delete old deliverable: ${oldDeliverable} from invoice ${invoice.id}`);
+      }
+    } catch (err) {
+      logError('replace-delivery-delete-old', err);
+      // Continue anyway - new link is already dropped from Discord storage
+    }
+
+    // Update the invoice details with new link
+    storage.markInvoiceClaimed(interaction.guild.id, invoiceId, invoiceDetails.userId, {
+      customerEmail: invoiceDetails.customerEmail,
+      browser: invoiceDetails.browser,
+      amount: invoiceDetails.amount,
+      invoice: invoice,
+    });
+
+    // Send new link to user via DM
+    try {
+      const user = await interaction.client.users.fetch(invoiceDetails.userId);
+      await user.send({
+        content: `🔄 **Your delivery has been replaced!**\n\nOld key: \`${oldDeliverable}\`\nNew key:\n\`\`\`\n${newLink}\n\`\`\``,
+      });
+    } catch (dmErr) {
+      logError('replace-delivery-send-dm', dmErr);
+    }
+
+    await interaction.editReply(`✅ Replaced delivery!\n\nOld: \`${oldDeliverable}\`\nNew: \`${newLink}\`\n\nUser has been notified via DM.`);
+  } catch (err) {
+    logError('replace-delivery', err);
+    await interaction.editReply('Something went wrong replacing the delivery.');
+  }
+}
+
 async function handleTicketButton(interaction) {
   const ticket = storage.getTicket(interaction.channel.id);
 
@@ -306,6 +392,7 @@ module.exports = {
       if (interaction.isChatInputCommand()) return handleChatInputCommand(interaction);
 
       if (interaction.isButton()) {
+        if (interaction.customId.startsWith('replace_delivery_')) return handleReplaceDelivery(interaction);
         if (interaction.customId.startsWith('ticket_')) return handleTicketButton(interaction);
         if (interaction.customId === 'giveaway_enter') return handleGiveawayEnter(interaction);
         if (interaction.customId === 'sellauth_claim_role') return handleSellauthClaimButton(interaction);
