@@ -35,7 +35,7 @@ const warnings = load('warnings', {});
 const giveaways = load('giveaways', {});
 const customers = load('customers', {}); // sellauth lifetime spending tracking: {guildId-userId: totalSpent}
 const claimedInvoices = load('claimed_invoices', {}); // prevents the same invoice being redeemed twice + stores details
-const links = load('links', {}); // link storage: {guildId: [link1, link2, ...]}
+const links = load('links', {}); // link storage: {guildId: {1x: [...], 7x: [...], 30x: [...]}}
 
 const DEFAULT_GUILD_CONFIG = {
   ticketImage: null,
@@ -171,30 +171,61 @@ function markInvoiceClaimed(guildId, invoiceId, userId, invoiceData = {}) {
   save('claimed_invoices', claimedInvoices);
 }
 
-// Link management
-function getLinks(guildId) {
-  return links[guildId] || [];
+// Link management - organized by category (1x, 7x, 30x)
+function getLinksForCategory(guildId, category) {
+  if (!links[guildId]) links[guildId] = { '1x': [], '7x': [], '30x': [] };
+  if (!links[guildId][category]) links[guildId][category] = [];
+  return links[guildId][category];
 }
 
-function addLink(guildId, link) {
-  if (!links[guildId]) links[guildId] = [];
-  links[guildId].push(link);
+function addLink(guildId, link, category = '1x') {
+  if (!links[guildId]) links[guildId] = { '1x': [], '7x': [], '30x': [] };
+  if (!links[guildId][category]) links[guildId][category] = [];
+  links[guildId][category].push(link);
   save('links', links);
-  return links[guildId].length;
+  return {
+    total: (links[guildId]['1x'] || []).length + (links[guildId]['7x'] || []).length + (links[guildId]['30x'] || []).length,
+    category: category,
+    categoryCount: links[guildId][category].length,
+  };
 }
 
-function dropLink(guildId) {
-  if (!links[guildId] || links[guildId].length === 0) {
-    return null; // No links available
+function dropLink(guildId, category = '1x') {
+  if (!links[guildId] || !links[guildId][category] || links[guildId][category].length === 0) {
+    return null; // No links available in this category
   }
-  const dropped = links[guildId].shift(); // Remove first link
+  const dropped = links[guildId][category].shift(); // Remove first link
   save('links', links);
   return dropped;
 }
 
-function clearLinks(guildId) {
-  links[guildId] = [];
-  save('links', links);
+function getAllLinksStats(guildId) {
+  if (!links[guildId]) links[guildId] = { '1x': [], '7x': [], '30x': [] };
+  return {
+    '1x': links[guildId]['1x']?.length || 0,
+    '7x': links[guildId]['7x']?.length || 0,
+    '30x': links[guildId]['30x']?.length || 0,
+  };
+}
+
+function getLinksForDisplay(guildId, category) {
+  return getLinksForCategory(guildId, category);
+}
+
+function clearLinks(guildId, category = null) {
+  if (!links[guildId]) links[guildId] = { '1x': [], '7x': [], '30x': [] };
+  
+  if (category) {
+    const removed = links[guildId][category]?.length || 0;
+    links[guildId][category] = [];
+    save('links', links);
+    return removed;
+  } else {
+    const total = (links[guildId]['1x'] || []).length + (links[guildId]['7x'] || []).length + (links[guildId]['30x'] || []).length;
+    links[guildId] = { '1x': [], '7x': [], '30x': [] };
+    save('links', links);
+    return total;
+  }
 }
 
 function isPingAllowed(guildId, member) {
@@ -253,9 +284,11 @@ module.exports = {
   isInvoiceClaimed,
   getInvoiceDetails,
   markInvoiceClaimed,
-  getLinks,
+  getLinksForCategory,
   addLink,
   dropLink,
+  getAllLinksStats,
+  getLinksForDisplay,
   clearLinks,
   isPingAllowed,
   addPingAllowRole,
