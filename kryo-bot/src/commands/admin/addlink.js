@@ -1,11 +1,11 @@
-const { SlashCommandBuilder } = require('discord.js');
+const { SlashCommandBuilder, AttachmentBuilder } = require('discord.js');
 const storage = require('../../utils/storage');
 const { logError } = require('../../utils/errorHandler');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('addlink')
-    .setDescription('Add links to the stock by category')
+    .setDescription('Add links to the stock by category (upload notepad file)')
     .addStringOption(option =>
       option
         .setName('category')
@@ -17,25 +17,48 @@ module.exports = {
           { name: '30x', value: '30x' }
         )
     )
-    .addStringOption(option =>
+    .addAttachmentOption(option =>
       option
-        .setName('links')
-        .setDescription('Links to add (one per line)')
+        .setName('file')
+        .setDescription('Notepad file with links (one per line)')
         .setRequired(true)
     ),
   async execute(interaction) {
     try {
       const category = interaction.options.getString('category');
-      const linksInput = interaction.options.getString('links');
+      const attachment = interaction.options.getAttachment('file');
+
+      // Validate file
+      if (!attachment) {
+        return interaction.reply({ content: 'Please upload a file.', ephemeral: true });
+      }
+
+      // Check file size (limit to 1MB)
+      if (attachment.size > 1024 * 1024) {
+        return interaction.reply({ content: 'File is too large (max 1MB).', ephemeral: true });
+      }
+
+      // Fetch file content
+      let fileContent;
+      try {
+        const response = await fetch(attachment.url);
+        fileContent = await response.text();
+      } catch (err) {
+        logError('addlink-fetch-file', err);
+        return interaction.reply({
+          content: 'Failed to read the file. Make sure it\'s a text file (.txt).',
+          ephemeral: true,
+        });
+      }
 
       // Split by newlines and filter out empty lines
-      const linksList = linksInput
+      const linksList = fileContent
         .split('\n')
         .map(line => line.trim())
         .filter(line => line.length > 0);
 
       if (linksList.length === 0) {
-        return interaction.reply({ content: 'No valid links provided.', ephemeral: true });
+        return interaction.reply({ content: 'No valid links found in the file.', ephemeral: true });
       }
 
       // Add all links
