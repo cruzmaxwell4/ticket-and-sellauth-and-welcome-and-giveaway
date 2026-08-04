@@ -22,6 +22,9 @@ async function handleChatInputCommand(interaction) {
   // Staff commands
   const staffCommands = ['tickettranscript'];
 
+  // Droplink - owner OR allowed roles
+  const dropLinkCommands = ['droplink'];
+
   // Owner-only commands: ALL sellauth commands + admin/link commands
   const ownerOnlyCommands = [
     // Ticket commands
@@ -29,7 +32,7 @@ async function handleChatInputCommand(interaction) {
     // SellAuth commands (owner-only)
     'sellauthshopid', 'sellauthapi', 'sellauthrole', 'restocksellauthproduct',
     // Link management commands (owner-only)
-    'addlink', 'droplink', 'showlink', 'clearlinks',
+    'addlink', 'showlink', 'clearlinks', 'allowdroplink', 'disallowdroplink', 'showdroplink',
     // Ping & role commands
     'pingrole', 'pingroleallow', 'bigrolescommands',
     // Utility commands
@@ -42,8 +45,14 @@ async function handleChatInputCommand(interaction) {
       if (!isSupport(interaction, storage.getGuildConfig(interaction.guild.id))) {
         return interaction.reply({ content: 'Only staff can use this command.', ephemeral: true });
       }
-    } else {
-      // All other commands are owner-only
+    } else if (dropLinkCommands.includes(interaction.commandName)) {
+      // Special check for /droplink - owner OR allowed roles
+      const member = await interaction.guild.members.fetch(interaction.user.id);
+      if (!isOwner(interaction) && !storage.canDropLink(interaction.guild.id, member)) {
+        return interaction.reply({ content: 'Only the owner or allowed roles can use this command.', ephemeral: true });
+      }
+    } else if (ownerOnlyCommands.includes(interaction.commandName)) {
+      // All other admin commands are owner-only
       if (!isOwner(interaction)) {
         return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
       }

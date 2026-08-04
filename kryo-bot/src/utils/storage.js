@@ -56,6 +56,8 @@ const DEFAULT_GUILD_CONFIG = {
   pingProtectedUserId: null,
   pingAllowedRoles: [], // roles that can ping without warnings
 
+  dropLinkAllowedRoles: [], // roles allowed to use /droplink (in addition to owner)
+
   commandAllowRoles: [], // roles allowed to use bot commands (max 5)
 
   welcomeChannel: null,
@@ -228,6 +230,33 @@ function clearLinks(guildId, category = null) {
   }
 }
 
+function canDropLink(guildId, member) {
+  const cfg = getGuildConfig(guildId);
+  const allowedRoles = cfg.dropLinkAllowedRoles || [];
+  // Check if member has any of the allowed roles
+  return allowedRoles.some((roleId) => member.roles.cache.has(roleId));
+}
+
+function addDropLinkRole(guildId, roleId) {
+  const cfg = getGuildConfig(guildId);
+  const allowed = cfg.dropLinkAllowedRoles || [];
+  if (!allowed.includes(roleId)) {
+    allowed.push(roleId);
+    setGuildConfig(guildId, { dropLinkAllowedRoles: allowed });
+  }
+}
+
+function removeDropLinkRole(guildId, roleId) {
+  const cfg = getGuildConfig(guildId);
+  const allowed = (cfg.dropLinkAllowedRoles || []).filter((id) => id !== roleId);
+  setGuildConfig(guildId, { dropLinkAllowedRoles: allowed });
+}
+
+function getDropLinkRoles(guildId) {
+  const cfg = getGuildConfig(guildId);
+  return cfg.dropLinkAllowedRoles || [];
+}
+
 function isPingAllowed(guildId, member) {
   const cfg = getGuildConfig(guildId);
   const allowedRoles = cfg.pingAllowedRoles || [];
@@ -290,6 +319,10 @@ module.exports = {
   getAllLinksStats,
   getLinksForDisplay,
   clearLinks,
+  canDropLink,
+  addDropLinkRole,
+  removeDropLinkRole,
+  getDropLinkRoles,
   isPingAllowed,
   addPingAllowRole,
   removePingAllowRole,
