@@ -55,6 +55,9 @@ module.exports = {
         }
       }
 
+      // Check if payment method is PayPal
+      const isPayPal = paymentMethod.toLowerCase().includes('paypal');
+
       // Format dates to AUS timezone
       const formatAusDate = (date) => {
         if (!date) return 'N/A';
@@ -94,14 +97,17 @@ module.exports = {
           { name: '✅ **COMPLETED (AUS)**', value: `**${completedStr}**`, inline: true },
         );
 
-      // Add "Mark as Delivered" button (owner-only)
-      const button = new ButtonBuilder()
-        .setCustomId(`mark_delivered_${invoiceId}`)
-        .setLabel('Mark as Delivered')
-        .setStyle(ButtonStyle.Success)
-        .setEmoji('📦');
-      
-      const components = [new ActionRowBuilder().addComponents(button)];
+      // Add "Mark as Delivered" button ONLY for PayPal payments
+      let components = [];
+      if (isPayPal) {
+        const button = new ButtonBuilder()
+          .setCustomId(`mark_delivered_${invoiceId}`)
+          .setLabel('Mark as Delivered')
+          .setStyle(ButtonStyle.Success)
+          .setEmoji('📦');
+        
+        components.push(new ActionRowBuilder().addComponents(button));
+      }
 
       await interaction.editReply({ embeds: [embed], components });
     } catch (err) {
