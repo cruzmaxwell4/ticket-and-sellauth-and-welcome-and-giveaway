@@ -40,12 +40,14 @@ async function openTicket(interaction) {
     return interaction.reply({ content: 'Ticket system is not fully configured yet (missing `/ticketchannel`). Ask an admin to finish setup.', ephemeral: true });
   }
 
-  // Prevent a user from having two open tickets at once
-  const existing = storage.getAllTicketsForGuild(guild.id).find((t) => t.openerId === user.id && !t.closed);
-  if (existing) {
-    const chan = guild.channels.cache.get(existing.channelId);
+  // Check for existing open tickets - strict check: must be open AND channel must still exist
+  const allUserTickets = storage.getAllTicketsForGuild(guild.id).filter((t) => t.openerId === user.id && !t.closed);
+  
+  for (const ticket of allUserTickets) {
+    const chan = guild.channels.cache.get(ticket.channelId);
     if (chan) {
-      return interaction.reply({ content: `You already have an open ticket: ${chan}`, ephemeral: true });
+      // Found an open ticket channel that still exists
+      return interaction.reply({ content: `You already have 1 open ticket: ${chan}. Close it first before opening a new one.`, ephemeral: true });
     }
   }
 
