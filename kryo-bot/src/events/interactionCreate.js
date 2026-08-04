@@ -203,27 +203,57 @@ async function handleSellauthClaimModal(interaction) {
     return interaction.editReply('That invoice has already been used to claim a role.');
   }
 
-  const total = Number(sellauth.getInvoiceTotal(invoice) || 0);
+  const invoiceAmount = Number(sellauth.getInvoiceTotal(invoice) || 0);
+  
+  // Add to lifetime spending and get new total
+  const lifetimeTotal = storage.addToLifetimeSpending(interaction.guild.id, interaction.user.id, invoiceAmount);
+
+  // Determine roles based on LIFETIME total spending
   const tiers = [
     { min: 300, roleId: cfg.sellauthRole300, label: '$300+' },
     { min: 50, roleId: cfg.sellauthRole50, label: '$50+' },
     { min: 1, roleId: cfg.sellauthRole1, label: '$1+' },
-  ].filter((t) => t.roleId && total >= t.min);
+  ].filter((t) => t.roleId && lifetimeTotal >= t.min);
 
   if (tiers.length === 0) {
-    return interaction.editReply(`This invoice totals $${total}, which doesn't qualify for any configured purchase role.`);
+    return interaction.editReply(`Your total spending is $${lifetimeTotal}, which doesn't qualify for any configured purchase role yet. Keep purchasing!`);
   }
 
   const member = await interaction.guild.members.fetch(interaction.user.id);
   const given = [];
-  for (const tier of tiers) {
+  const removed = [];
+  
+  // Get all tiers the user should have
+  const tierRoleIds = new Set(tiers.map((t) => t.roleId));
+  
+  // Add new roles and remove old ones they don't qualify for anymore
+  const allTiers = [
+    { min: 300, roleId: cfg.sellauthRole300, label: '$300+' },
+    { min: 50, roleId: cfg.sellauthRole50, label: '$50+' },
+    { min: 1, roleId: cfg.sellauthRole1, label: '$1+' },
+  ].filter((t) => t.roleId);
+
+  for (const tier of allTiers) {
     const role = interaction.guild.roles.cache.get(tier.roleId);
     if (!role) continue;
-    try {
-      await member.roles.add(role);
-      given.push(role.toString());
-    } catch (err) {
-      logError('sellauth_claim_modal_role_add', err);
+
+    const hasRole = member.roles.cache.has(tier.roleId);
+    const shouldHave = tierRoleIds.has(tier.roleId);
+
+    if (shouldHave && !hasRole) {
+      try {
+        await member.roles.add(role);
+        given.push(role.toString());
+      } catch (err) {
+        logError('sellauth_claim_modal_role_add', err);
+      }
+    } else if (!shouldHave && hasRole) {
+      try {
+        await member.roles.remove(role);
+        removed.push(role.toString());
+      } catch (err) {
+        logError('sellauth_claim_modal_role_remove', err);
+      }
     }
   }
 
@@ -231,11 +261,15 @@ async function handleSellauthClaimModal(interaction) {
   storage.markInvoiceClaimed(interaction.guild.id, invoiceId, interaction.user.id, {
     customerEmail: invoice.email || invoice.customer_email || 'N/A',
     browser: invoice.user_agent || 'N/A',
+    amount: invoiceAmount,
     invoice: invoice,
   });
-  storage.addClaimedRole(interaction.guild.id, interaction.user.id, tiers.map((t) => t.label).join(','));
 
-  await interaction.editReply(given.length ? `Invoice verified! You've been given: ${given.join(', ')}` : 'Invoice verified, but I could not assign the role(s) - ask an admin to check my role position.');
+  let response = `Invoice verified! Your total lifetime spending: **$${lifetimeTotal}**`;
+  if (given.length > 0) response += `\nGained roles: ${given.join(', ')}`;
+  if (removed.length > 0) response += `\nRemoved roles: ${removed.join(', ')}`;
+
+  await interaction.editReply(response);
 }
 
 async function handleRestockModal(interaction) {
