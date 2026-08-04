@@ -18,9 +18,12 @@ module.exports = {
   async execute(message) {
     if (!message.guild || message.author.bot || !message.member) return;
 
-    // Handle ticket auto-response - reply to every message the opener sends
+    // Handle ticket auto-response - only reply to opener's FIRST message
     const ticket = storage.getTicket(message.channelId);
-    if (ticket && ticket.openerId === message.author.id) {
+    if (ticket && ticket.openerId === message.author.id && !ticket.hasResponded) {
+      // Mark that we've already sent the auto-response
+      storage.setTicket(message.channelId, { hasResponded: true });
+      
       try {
         await message.reply({ content: '**Ok we understand support will be with u soon**' });
       } catch (err) {
