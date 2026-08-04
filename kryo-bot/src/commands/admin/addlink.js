@@ -19,29 +19,43 @@ module.exports = {
     )
     .addStringOption(option =>
       option
-        .setName('link')
-        .setDescription('The link to add')
+        .setName('links')
+        .setDescription('Links to add (one per line)')
         .setRequired(true)
     ),
   async execute(interaction) {
     try {
       const category = interaction.options.getString('category');
-      const link = interaction.options.getString('link');
+      const linksInput = interaction.options.getString('links');
 
-      if (!link.trim()) {
-        return interaction.reply({ content: 'Link cannot be empty.', ephemeral: true });
+      // Split by newlines and filter out empty lines
+      const linksList = linksInput
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line.length > 0);
+
+      if (linksList.length === 0) {
+        return interaction.reply({ content: 'No valid links provided.', ephemeral: true });
       }
 
-      const result = storage.addLink(interaction.guild.id, link, category);
+      // Add all links
+      let categoryCount = 0;
+      let totalCount = 0;
+      
+      for (const link of linksList) {
+        const result = storage.addLink(interaction.guild.id, link, category);
+        categoryCount = result.categoryCount;
+        totalCount = result.total;
+      }
 
       await interaction.reply({
-        content: `✅ Link added to **${category}** stock!\nCategory: **${result.categoryCount}** | Total: **${result.total}**`,
+        content: `✅ Added **${linksList.length}** links to **${category}** stock!\n\nCategory: **${categoryCount}** | Total: **${totalCount}**`,
         ephemeral: true,
       });
     } catch (err) {
       logError('command-addlink', err, { guildId: interaction.guild?.id });
       await interaction.reply({
-        content: 'Something went wrong adding the link.',
+        content: 'Something went wrong adding the links.',
         ephemeral: true,
       }).catch(() => {});
     }
