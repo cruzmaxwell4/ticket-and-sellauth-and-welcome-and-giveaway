@@ -22,11 +22,18 @@ async function handleChatInputCommand(interaction) {
   // Staff commands
   const staffCommands = ['tickettranscript'];
 
-  // Owner-only commands (default)
+  // Owner-only commands: ALL sellauth commands + admin/link commands
   const ownerOnlyCommands = [
+    // Ticket commands
     'ticket', 'ticketchannel', 'ticketpingroles', 'tickettrans', 'ticketdone',
+    // SellAuth commands (owner-only)
     'sellauthshopid', 'sellauthapi', 'sellauthrole', 'restocksellauthproduct',
-    'pingrole', 'pingroleallow', 'bigrolescommands', 'giveaway', 'welcome'
+    // Link management commands (owner-only)
+    'addlink', 'droplink', 'showlink', 'clearlinks',
+    // Ping & role commands
+    'pingrole', 'pingroleallow', 'bigrolescommands',
+    // Utility commands
+    'giveaway', 'welcome'
   ];
 
   // Check command permissions
