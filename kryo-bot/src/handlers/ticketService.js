@@ -12,6 +12,10 @@ const { buildTranscript } = require('../utils/transcript');
 const { logError } = require('../utils/errorHandler');
 
 const TWENTY_EIGHT_DAYS_MS = 28 * 24 * 60 * 60 * 1000;
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+
+// Track scheduled deletions
+const scheduledDeletions = new Map();
 
 function ticketControlRow() {
   return new ActionRowBuilder().addComponents(
@@ -84,7 +88,6 @@ async function openTicket(interaction) {
   const pingRoles = (cfg.ticketPingRoles || []).map((id) => `<@&${id}>`).join(' ');
   if (pingRoles) {
     const pingMsg = await channel.send({ content: pingRoles });
-    // keep the ping silent visually after alerting - leave message, most setups prefer to keep it for context
     void pingMsg;
   }
 
@@ -159,7 +162,36 @@ async function closeTicket(interaction, channel, ticket) {
     logError('ticket-rename-to-done', err);
   }
 
-  await channel.send({ content: 'This ticket has been closed/done please make a new ticket for more support' });
+  // Send closure message in bold
+  await channel.send({ content: '**This ticket has been closed/done please make a new ticket for more support. Channel will be deleted in 2 Hours**' });
+
+  // Schedule channel deletion after 2 hours
+  scheduleChannelDeletion(channel, ticket);
+}
+
+function scheduleChannelDeletion(channel, ticket) {
+  // Cancel any existing scheduled deletion for this channel
+  if (scheduledDeletions.has(channel.id)) {
+    clearTimeout(scheduledDeletions.get(channel.id));
+  }
+
+  // Schedule deletion after 2 hours
+  const timeoutId = setTimeout(async () => {
+    try {
+      // Send final transcript before deletion
+      await sendTranscript({ guild: channel.guild }, channel, ticket);
+      
+      // Delete the channel
+      await channel.delete('Auto-deleted after 2 hours (ticket closure)');
+      console.log(`[ticketService] Deleted done channel: ${channel.name}`);
+    } catch (err) {
+      logError('ticket-auto-delete', err);
+    } finally {
+      scheduledDeletions.delete(channel.id);
+    }
+  }, TWO_HOURS_MS);
+
+  scheduledDeletions.set(channel.id, timeoutId);
 }
 
 async function wasteOfTime(interaction, ticket) {
