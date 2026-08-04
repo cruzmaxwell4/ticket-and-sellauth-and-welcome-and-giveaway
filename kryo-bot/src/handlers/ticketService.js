@@ -5,6 +5,7 @@ const {
   ButtonBuilder,
   ButtonStyle,
   StringSelectMenuBuilder,
+  EmbedBuilder,
 } = require('discord.js');
 const storage = require('../utils/storage');
 const { memberInfoEmbed } = require('../utils/embeds');
@@ -16,6 +17,7 @@ const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
 // Track scheduled deletions
 const scheduledDeletions = new Map();
+const countdownMessages = new Map();
 
 function ticketControlRow() {
   return new ActionRowBuilder().addComponents(
@@ -116,10 +118,14 @@ async function sendTranscript(interaction, channel, ticket) {
   if (cfg.ticketTransChannel) {
     const transChannel = channel.guild.channels.cache.get(cfg.ticketTransChannel);
     if (transChannel) {
-      await transChannel.send({
-        content: `Transcript for ${channel.name} (opened by <@${ticket.openerId}>)`,
-        files: [attachment],
-      });
+      try {
+        await transChannel.send({
+          content: `Transcript for ${channel.name} (opened by <@${ticket.openerId}>)`,
+          files: [attachment],
+        });
+      } catch (err) {
+        logError('ticket-send-transcript-to-channel', err);
+      }
     }
   }
 
@@ -165,8 +171,23 @@ async function closeTicket(interaction, channel, ticket) {
     logError('ticket-rename-to-done', err);
   }
 
-  // Send closure message in bold with review link
-  await channel.send({ content: '**This ticket has been closed/done please make a new ticket for more support. Channel will be deleted in 2 Hours, Don\'t forgot to leave https://discord.com/channels/1501358367153852687/1531526946226307152**' });
+  // Send closure message with countdown timer
+  try {
+    const embed = new EmbedBuilder()
+      .setColor(0x2ecc71)
+      .setTitle('✅ Ticket Closed')
+      .setDescription('This ticket has been closed/done please make a new ticket for more support.')
+      .addFields(
+        { name: '⏱️ Channel Deletion Timer', value: '2 hours (7200 seconds)', inline: false },
+        { name: '📝 Transcript', value: 'Sent to transcript channel & your DM', inline: false },
+        { name: '📋 Review', value: '[Leave us feedback](https://discord.com/channels/1501358367153852687/1531526946226307152)', inline: false }
+      );
+
+    const countdownMsg = await channel.send({ embeds: [embed] });
+    countdownMessages.set(channel.id, { message: countdownMsg, startTime: Date.now() });
+  } catch (err) {
+    logError('ticket-send-closure-message', err);
+  }
 
   // Schedule channel deletion after 2 hours
   scheduleChannelDeletion(channel, ticket);
@@ -178,11 +199,70 @@ function scheduleChannelDeletion(channel, ticket) {
     clearTimeout(scheduledDeletions.get(channel.id));
   }
 
+  let remainingTime = TWO_HOURS_MS;
+  let updateInterval = null;
+
+  const updateCountdown = async () => {
+    try {
+      const elapsed = Date.now() - (countdownMessages.get(channel.id)?.startTime || Date.now());
+      remainingTime = Math.max(0, TWO_HOURS_MS - elapsed);
+
+      const hours = Math.floor(remainingTime / 3600000);
+      const minutes = Math.floor((remainingTime % 3600000) / 60000);
+      const seconds = Math.floor((remainingTime % 60000) / 1000);
+
+      const countdownData = countdownMessages.get(channel.id);
+      if (countdownData && countdownData.message) {
+        const embed = new EmbedBuilder()
+          .setColor(remainingTime > 3600000 ? 0x2ecc71 : remainingTime > 1800000 ? 0xf39c12 : 0xe74c3c)
+          .setTitle('✅ Ticket Closed')
+          .setDescription('This ticket has been closed/done please make a new ticket for more support.')
+          .addFields(
+            { name: '⏱️ Channel Deletion Timer', value: `${hours}h ${minutes}m ${seconds}s remaining`, inline: false },
+            { name: '📝 Transcript', value: 'Sent to transcript channel & your DM', inline: false },
+            { name: '📋 Review', value: '[Leave us feedback](https://discord.com/channels/1501358367153852687/1531526946226307152)', inline: false }
+          );
+
+        try {
+          await countdownData.message.edit({ embeds: [embed] });
+        } catch (err) {
+          // Message was deleted, no need to update
+        }
+      }
+    } catch (err) {
+      logError('ticket-countdown-update', err);
+    }
+  };
+
+  // Update countdown every 10 seconds
+  updateInterval = setInterval(updateCountdown, 10000);
+
   // Schedule deletion after 2 hours
   const timeoutId = setTimeout(async () => {
     try {
+      // Clear the update interval
+      if (updateInterval) clearInterval(updateInterval);
+
       // Send final transcript before deletion
       await sendTranscript({ guild: channel.guild }, channel, ticket);
+
+      // Send deletion notification
+      try {
+        const notificationEmbed = new EmbedBuilder()
+          .setColor(0x2b2d31)
+          .setTitle('⏰ Channel Deletion')
+          .setDescription('This channel will be deleted in 10 seconds...');
+        
+        const countdownData = countdownMessages.get(channel.id);
+        if (countdownData && countdownData.message) {
+          await countdownData.message.edit({ embeds: [notificationEmbed] });
+        }
+      } catch (err) {
+        // Message already deleted
+      }
+
+      // Wait 10 seconds before deleting
+      await new Promise(resolve => setTimeout(resolve, 10000));
 
       // Delete the channel
       await channel.delete('Auto-deleted after 2 hours (ticket closure)');
@@ -190,6 +270,7 @@ function scheduleChannelDeletion(channel, ticket) {
     } catch (err) {
       logError('ticket-auto-delete', err);
     } finally {
+      countdownMessages.delete(channel.id);
       scheduledDeletions.delete(channel.id);
     }
   }, TWO_HOURS_MS);
