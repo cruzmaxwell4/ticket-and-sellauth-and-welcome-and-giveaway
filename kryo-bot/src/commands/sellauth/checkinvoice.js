@@ -1,6 +1,7 @@
-const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
+const { SlashCommandBuilder, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 const storage = require('../../utils/storage');
 const sellauth = require('../../utils/sellauth');
+const { isOwner } = require('../../utils/permissions');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -94,7 +95,19 @@ module.exports = {
           { name: '✅ **COMPLETED (AUS)**', value: `**${completedStr}**`, inline: true },
         );
 
-      await interaction.editReply({ embeds: [embed] });
+      // Add owner-only button if user is owner
+      let components = [];
+      if (isOwner({ user: interaction.user, guild: interaction.guild })) {
+        const button = new ButtonBuilder()
+          .setCustomId(`replace_delivery_${invoiceId}`)
+          .setLabel('Replace Delivery')
+          .setStyle(ButtonStyle.Danger)
+          .setEmoji('🔄');
+        
+        components.push(new ActionRowBuilder().addComponents(button));
+      }
+
+      await interaction.editReply({ embeds: [embed], components });
     } catch (err) {
       if (err.response?.status === 404) {
         return interaction.editReply(`❌ No invoice found matching \`${invoiceId}\`.`);
