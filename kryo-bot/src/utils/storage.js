@@ -33,7 +33,7 @@ const guildConfigs = load('config', {});
 const tickets = load('tickets', {});
 const warnings = load('warnings', {});
 const giveaways = load('giveaways', {});
-const customers = load('customers', {}); // sellauth role-claim tracking
+const customers = load('customers', {}); // sellauth lifetime spending tracking: {guildId-userId: totalSpent}
 const claimedInvoices = load('claimed_invoices', {}); // prevents the same invoice being redeemed twice + stores details
 
 const DEFAULT_GUILD_CONFIG = {
@@ -134,16 +134,19 @@ function getActiveGiveaways(guildId) {
     .map(([messageId, g]) => ({ messageId, ...g }));
 }
 
-function getClaimedRoles(guildId, userId) {
-  return customers[`${guildId}-${userId}`] || [];
+// Get total lifetime spending for a user in a guild
+function getTotalLifetimeSpending(guildId, userId) {
+  return customers[`${guildId}-${userId}`] || 0;
 }
 
-function addClaimedRole(guildId, userId, roleTier) {
+// Add amount to user's lifetime spending
+function addToLifetimeSpending(guildId, userId, amount) {
   const key = `${guildId}-${userId}`;
-  const current = customers[key] || [];
-  if (!current.includes(roleTier)) current.push(roleTier);
-  customers[key] = current;
+  const current = customers[key] || 0;
+  const newTotal = current + amount;
+  customers[key] = newTotal;
   save('customers', customers);
+  return newTotal;
 }
 
 function isInvoiceClaimed(guildId, invoiceId) {
@@ -161,6 +164,7 @@ function markInvoiceClaimed(guildId, invoiceId, userId, invoiceData = {}) {
     claimedAt: Date.now(),
     customerEmail: invoiceData.customerEmail || invoiceData.email || 'N/A',
     browser: invoiceData.browser || invoiceData.userAgent || 'N/A',
+    amount: invoiceData.amount || 0,
     invoiceData: invoiceData, // store full invoice data for reference
   };
   save('claimed_invoices', claimedInvoices);
@@ -217,8 +221,8 @@ module.exports = {
   getGiveaway,
   setGiveaway,
   getActiveGiveaways,
-  getClaimedRoles,
-  addClaimedRole,
+  getTotalLifetimeSpending,
+  addToLifetimeSpending,
   isInvoiceClaimed,
   getInvoiceDetails,
   markInvoiceClaimed,
