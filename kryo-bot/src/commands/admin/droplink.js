@@ -40,7 +40,7 @@ module.exports = {
       // Send link to user in DM
       try {
         await user.send({
-          content: `**${category} Key:**\n\`\`\`\n${link}\n\`\`\``,
+          content: `**${category} Key:**\n\`\`\`\n${link}\n\`\`\`\n\n**Here to use it:** https://discord.com/channels/1501358367153852687/1532317478489952326`,
         });
         const stats = storage.getAllLinksStats(interaction.guild.id);
         await interaction.reply({
@@ -51,7 +51,7 @@ module.exports = {
         // If DM fails, send in a code block in chat instead
         const stats = storage.getAllLinksStats(interaction.guild.id);
         await interaction.reply({
-          content: `**${category} Key for ${user}:**\n\`\`\`\n${link}\n\`\`\`\n\nRemaining Stock:\n1x: **${stats['1x']}** | 7x: **${stats['7x']}** | 30x: **${stats['30x']}**`,
+          content: `**${category} Key for ${user}:**\n\`\`\`\n${link}\n\`\`\`\n\n**Here to use it:** https://discord.com/channels/1501358367153852687/1532317478489952326\n\nRemaining Stock:\n1x: **${stats['1x']}** | 7x: **${stats['7x']}** | 30x: **${stats['30x']}**`,
           ephemeral: true,
         });
       }
