@@ -36,10 +36,11 @@ const giveaways = load('giveaways', {});
 const customers = load('customers', {}); // sellauth lifetime spending tracking: {guildId-userId: totalSpent}
 const claimedInvoices = load('claimed_invoices', {}); // prevents the same invoice being redeemed twice + stores details
 const links = load('links', {}); // link storage: {guildId: {1x: [...], 7x: [...], 30x: [...]}}
+const customerEmails = load('customer_emails', {}); // email tracking: {guildId-email: {purchaseCount, totalSpent, latestPurchase, invoices: []}}
 
 const DEFAULT_GUILD_CONFIG = {
   ticketImage: null,
-  ticketCategory: null, // set by /ticketchannel - category new ticket channels are created under
+  ticketCategory: null,
   ticketPingRoles: [],
   ticketTransChannel: null,
   ticketDoneChannel: null,
@@ -54,16 +55,16 @@ const DEFAULT_GUILD_CONFIG = {
 
   pingRole: null,
   pingProtectedUserId: null,
-  pingAllowedRoles: [], // roles that can ping without warnings
+  pingAllowedRoles: [],
 
-  dropLinkAllowedRoles: [], // roles allowed to use /droplink (in addition to owner)
+  dropLinkAllowedRoles: [],
+  checkInvoiceAllowedRoles: [],
 
-  commandAllowRoles: [], // roles allowed to use bot commands (max 5)
+  commandAllowRoles: [],
 
   welcomeChannel: null,
   welcomeEnabled: false,
-  welcomeImage: null, // big image on welcome message
-
+  welcomeImage: null,
 };
 
 function getGuildConfig(guildId) {
@@ -71,7 +72,6 @@ function getGuildConfig(guildId) {
     guildConfigs[guildId] = { ...DEFAULT_GUILD_CONFIG };
     save('config', guildConfigs);
   }
-  // backfill any keys added after a config was first created
   guildConfigs[guildId] = { ...DEFAULT_GUILD_CONFIG, ...guildConfigs[guildId] };
   return guildConfigs[guildId];
 }
@@ -137,12 +137,10 @@ function getActiveGiveaways(guildId) {
     .map(([messageId, g]) => ({ messageId, ...g }));
 }
 
-// Get total lifetime spending for a user in a guild
 function getTotalLifetimeSpending(guildId, userId) {
   return customers[`${guildId}-${userId}`] || 0;
 }
 
-// Add amount to user's lifetime spending
 function addToLifetimeSpending(guildId, userId, amount) {
   const key = `${guildId}-${userId}`;
   const current = customers[key] || 0;
@@ -162,18 +160,54 @@ function getInvoiceDetails(guildId, invoiceId) {
 
 function markInvoiceClaimed(guildId, invoiceId, userId, invoiceData = {}) {
   const key = `${guildId}-${invoiceId}`;
+  const email = (invoiceData.customerEmail || invoiceData.email || '').toLowerCase().trim();
+  
   claimedInvoices[key] = {
     userId,
     claimedAt: Date.now(),
-    customerEmail: invoiceData.customerEmail || invoiceData.email || 'N/A',
+    customerEmail: email || 'N/A',
     browser: invoiceData.browser || invoiceData.userAgent || 'N/A',
     amount: invoiceData.amount || 0,
-    invoiceData: invoiceData, // store full invoice data for reference
+    invoiceData: invoiceData,
   };
   save('claimed_invoices', claimedInvoices);
+
+  if (email && email !== 'N/A') {
+    trackCustomerPurchase(guildId, email, {
+      invoiceId,
+      userId,
+      amount: invoiceData.amount || 0,
+      claimedAt: Date.now(),
+      product: invoiceData.product || 'N/A',
+      paymentMethod: invoiceData.paymentMethod || 'N/A',
+    });
+  }
 }
 
-// Link management - organized by category (1x, 7x, 30x)
+function trackCustomerPurchase(guildId, email, purchaseData) {
+  const emailKey = `${guildId}-${email.toLowerCase().trim()}`;
+  const current = customerEmails[emailKey] || {
+    purchaseCount: 0,
+    totalSpent: 0,
+    latestPurchase: null,
+    invoices: [],
+  };
+
+  current.purchaseCount = (current.purchaseCount || 0) + 1;
+  current.totalSpent = (current.totalSpent || 0) + (purchaseData.amount || 0);
+  current.latestPurchase = purchaseData;
+  current.invoices = current.invoices || [];
+  current.invoices.push(purchaseData);
+
+  customerEmails[emailKey] = current;
+  save('customer_emails', customerEmails);
+}
+
+function getCustomerByEmail(guildId, email) {
+  const emailKey = `${guildId}-${email.toLowerCase().trim()}`;
+  return customerEmails[emailKey] || null;
+}
+
 function getLinksForCategory(guildId, category) {
   if (!links[guildId]) links[guildId] = { '1x': [], '7x': [], '30x': [] };
   if (!links[guildId][category]) links[guildId][category] = [];
@@ -194,9 +228,9 @@ function addLink(guildId, link, category = '1x') {
 
 function dropLink(guildId, category = '1x') {
   if (!links[guildId] || !links[guildId][category] || links[guildId][category].length === 0) {
-    return null; // No links available in this category
+    return null;
   }
-  const dropped = links[guildId][category].shift(); // Remove first link
+  const dropped = links[guildId][category].shift();
   save('links', links);
   return dropped;
 }
@@ -233,7 +267,6 @@ function clearLinks(guildId, category = null) {
 function canDropLink(guildId, member) {
   const cfg = getGuildConfig(guildId);
   const allowedRoles = cfg.dropLinkAllowedRoles || [];
-  // Check if member has any of the allowed roles
   return allowedRoles.some((roleId) => member.roles.cache.has(roleId));
 }
 
@@ -257,10 +290,35 @@ function getDropLinkRoles(guildId) {
   return cfg.dropLinkAllowedRoles || [];
 }
 
+function canCheckInvoice(guildId, member) {
+  const cfg = getGuildConfig(guildId);
+  const allowedRoles = cfg.checkInvoiceAllowedRoles || [];
+  return allowedRoles.some((roleId) => member.roles.cache.has(roleId));
+}
+
+function addCheckInvoiceRole(guildId, roleId) {
+  const cfg = getGuildConfig(guildId);
+  const allowed = cfg.checkInvoiceAllowedRoles || [];
+  if (!allowed.includes(roleId)) {
+    allowed.push(roleId);
+    setGuildConfig(guildId, { checkInvoiceAllowedRoles: allowed });
+  }
+}
+
+function removeCheckInvoiceRole(guildId, roleId) {
+  const cfg = getGuildConfig(guildId);
+  const allowed = (cfg.checkInvoiceAllowedRoles || []).filter((id) => id !== roleId);
+  setGuildConfig(guildId, { checkInvoiceAllowedRoles: allowed });
+}
+
+function getCheckInvoiceRoles(guildId) {
+  const cfg = getGuildConfig(guildId);
+  return cfg.checkInvoiceAllowedRoles || [];
+}
+
 function isPingAllowed(guildId, member) {
   const cfg = getGuildConfig(guildId);
   const allowedRoles = cfg.pingAllowedRoles || [];
-  // Check if member has any of the allowed roles
   return allowedRoles.some((roleId) => member.roles.cache.has(roleId));
 }
 
@@ -282,14 +340,11 @@ function removePingAllowRole(guildId, roleId) {
 function canUseCommands(guildId, member) {
   const cfg = getGuildConfig(guildId);
   const allowedRoles = cfg.commandAllowRoles || [];
-  // If no roles are set, only owner can use commands (handled by permissions.js)
   if (allowedRoles.length === 0) return false;
-  // Check if member has any of the allowed roles
   return allowedRoles.some((roleId) => member.roles.cache.has(roleId));
 }
 
 function setCommandAllowRoles(guildId, roleIds) {
-  // Limit to 5 roles
   const limited = roleIds.slice(0, 5);
   setGuildConfig(guildId, { commandAllowRoles: limited });
   return limited;
@@ -313,6 +368,8 @@ module.exports = {
   isInvoiceClaimed,
   getInvoiceDetails,
   markInvoiceClaimed,
+  trackCustomerPurchase,
+  getCustomerByEmail,
   getLinksForCategory,
   addLink,
   dropLink,
@@ -323,6 +380,10 @@ module.exports = {
   addDropLinkRole,
   removeDropLinkRole,
   getDropLinkRoles,
+  canCheckInvoice,
+  addCheckInvoiceRole,
+  removeCheckInvoiceRole,
+  getCheckInvoiceRoles,
   isPingAllowed,
   addPingAllowRole,
   removePingAllowRole,
