@@ -350,7 +350,44 @@ function setCommandAllowRoles(guildId, roleIds) {
   return limited;
 }
 
+function findCustomerByEmailInHistory(guildId, email) {
+  const emailLower = email.toLowerCase().trim();
+  const purchases = [];
+
+  for (const [key, invoice] of Object.entries(claimedInvoices)) {
+    if (!key.startsWith(guildId)) continue;
+    const customerEmail = (invoice.customerEmail || '').toLowerCase().trim();
+    if (customerEmail === emailLower && customerEmail !== 'N/A') {
+      purchases.push({
+        invoiceId: key.replace(`${guildId}-`, ''),
+        amount: invoice.amount || 0,
+        claimedAt: invoice.claimedAt || 0,
+        product: invoice.invoiceData?.product || 'N/A',
+      });
+    }
+  }
+
+  if (purchases.length === 0) return null;
+  purchases.sort((a, b) => b.claimedAt - a.claimedAt);
+  const latestPurchase = purchases[0];
+  const totalSpent = purchases.reduce((sum, p) => sum + p.amount, 0);
+
+  return {
+    purchaseCount: purchases.length,
+    totalSpent,
+    latestPurchase: {
+      invoiceId: latestPurchase.invoiceId,
+      amount: latestPurchase.amount,
+      product: latestPurchase.product,
+      claimedAt: latestPurchase.claimedAt,
+    },
+    invoices: purchases,
+  };
+}
+
+
 module.exports = {
+  findCustomerByEmailInHistory,
   getGuildConfig,
   setGuildConfig,
   getTicket,

@@ -18,7 +18,13 @@ module.exports = {
     await interaction.deferReply();
 
     try {
-      const customerData = storage.getCustomerByEmail(interaction.guild.id, email);
+      // First try to get from customerEmails DB (newly tracked purchases)
+      let customerData = storage.getCustomerByEmail(interaction.guild.id, email);
+
+      // If not found, search claimedInvoices for historical purchases
+      if (!customerData) {
+        customerData = storage.findCustomerByEmailInHistory(interaction.guild.id, email);
+      }
 
       if (!customerData) {
         return interaction.editReply(`❌ No purchase history found for **${email}**.`);
