@@ -25,14 +25,17 @@ async function handleChatInputCommand(interaction) {
   // Droplink - owner OR allowed roles
   const dropLinkCommands = ['droplink'];
 
+  // CheckInvoice - owner OR allowed roles
+  const checkInvoiceCommands = ['checkinvoice'];
+
   // Owner-only commands: ALL sellauth commands + admin/link commands
   const ownerOnlyCommands = [
     // Ticket commands
     'ticket', 'ticketchannel', 'ticketpingroles', 'tickettrans', 'ticketdone',
     // SellAuth commands (owner-only)
-    'sellauthshopid', 'sellauthapi', 'sellauthrole', 'restocksellauthproduct', 'payaccount',
+    'sellauthshopid', 'sellauthapi', 'sellauthrole', 'restocksellauthproduct', 'payaccount', 'sellauthemail',
     // Link management commands (owner-only)
-    'addlink', 'showlink', 'clearlinks', 'allowdroplink', 'disallowdroplink', 'showdroplink',
+    'addlink', 'showlink', 'clearlinks', 'allowdroplink', 'disallowdroplink', 'showdroplink', 'allowcheckinvoice',
     // Ping & role commands
     'pingrole', 'pingroleallow', 'bigrolescommands',
     // Utility commands
@@ -44,6 +47,12 @@ async function handleChatInputCommand(interaction) {
     if (staffCommands.includes(interaction.commandName)) {
       if (!isSupport(interaction, storage.getGuildConfig(interaction.guild.id))) {
         return interaction.reply({ content: 'Only staff can use this command.', ephemeral: true });
+      }
+    } else if (checkInvoiceCommands.includes(interaction.commandName)) {
+      // Special check for /checkinvoice - owner OR allowed roles
+      const member = await interaction.guild.members.fetch(interaction.user.id);
+      if (!isOwner(interaction) && !storage.canCheckInvoice(interaction.guild.id, member)) {
+        return interaction.reply({ content: 'Only the owner or allowed roles can use this command.', ephemeral: true });
       }
     } else if (dropLinkCommands.includes(interaction.commandName)) {
       // Special check for /droplink - owner OR allowed roles
@@ -215,20 +224,33 @@ async function handleReplaceDelivery(interaction) {
       // Continue anyway - new link is already dropped from Discord storage
     }
 
-    // Update the invoice details with new link
+    // Update the invoice details with new link and new deliverable info
     storage.markInvoiceClaimed(interaction.guild.id, invoiceId, invoiceDetails.userId, {
       customerEmail: invoiceDetails.customerEmail,
       browser: invoiceDetails.browser,
       amount: invoiceDetails.amount,
+      product: `${invoiceDetails.invoiceData?.product || 'N/A'} (Replaced)`,
       invoice: invoice,
+      replacedDelivery: {
+        oldLink: oldDeliverable,
+        newLink: newLink,
+        replacedAt: Date.now(),
+      }
     });
 
     // Send new link to user via DM
     try {
       const user = await interaction.client.users.fetch(invoiceDetails.userId);
-      await user.send({
-        content: `🔄 **Your delivery has been replaced!**\n\nOld key: \`${oldDeliverable}\`\nNew key:\n\`\`\`\n${newLink}\n\`\`\``,
-      });
+      const embed = new (require('discord.js')).EmbedBuilder()
+        .setColor(0xf39c12)
+        .setTitle('🔄 Delivery Replaced')
+        .addFields(
+          { name: 'Old Key', value: `\`${oldDeliverable}\``, inline: false },
+          { name: 'New Key', value: `\`\`\`\n${newLink}\n\`\`\``, inline: false },
+          { name: 'Status', value: '✅ Updated', inline: true },
+        );
+
+      await user.send({ embeds: [embed] });
     } catch (dmErr) {
       logError('replace-delivery-send-dm', dmErr);
     }
