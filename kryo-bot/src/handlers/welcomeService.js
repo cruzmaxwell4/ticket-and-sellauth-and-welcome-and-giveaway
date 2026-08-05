@@ -7,7 +7,7 @@ function buildWelcomeMessage(member, guild) {
     member,
     color: 0x57f287,
     title: `🎉 **WELCOME TO KRYO** 🎉`,
-    description: `**Welcome <@${member.id}>!**\n\nWe're excited to have you here! We offer the best **giveaways**, **accounts**, and **cheats**. If you have any problems, just make a ticket and our team will help! 👋`,
+    description: `**Welcome <@${member.id}> (${member.user.username})!**\n\nWe're excited to have you here! We offer the best **giveaways**, **accounts**, and **cheats**. If you have any problems, just make a ticket and our team will help! 👋`,
   });
 
   const messageObj = {
