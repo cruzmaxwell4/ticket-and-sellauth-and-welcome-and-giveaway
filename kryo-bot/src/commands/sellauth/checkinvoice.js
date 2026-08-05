@@ -21,17 +21,35 @@ module.exports = {
     try {
       const invoice = await sellauth.getInvoice(cfg.sellauthShopId, cfg.sellauthApiKey, invoiceId);
       
-      // Safely extract all invoice data
       const status = (invoice.status || 'unknown').toLowerCase();
       const total = sellauth.getInvoiceTotal(invoice) || 'N/A';
       const products = sellauth.getInvoiceProductNames(invoice) || 'N/A';
       const created = invoice.created_at ? new Date(invoice.created_at) : null;
       const completed = invoice.paid_at ? new Date(invoice.paid_at) : null;
 
-      // Get stored invoice details from database
-      const invoiceDetails = storage.getInvoiceDetails(interaction.guild.id, invoiceId);
+      let invoiceDetails = storage.getInvoiceDetails(interaction.guild.id, invoiceId);
+      
+      if (!invoiceDetails && (status === 'completed' || status === 'paid')) {
+        storage.markInvoiceClaimed(interaction.guild.id, invoiceId, interaction.user.id, {
+          customerEmail: invoice.email || invoice.customer_email || 'N/A',
+          browser: invoice.user_agent || 'N/A',
+          amount: sellauth.getInvoiceTotal(invoice) || 0,
+          invoice: invoice,
+        });
+        invoiceDetails = storage.getInvoiceDetails(interaction.guild.id, invoiceId);
+      }
 
-      // Extract customer info - try multiple fields
+      let variantInfo = 'N/A';
+      const items = invoice.cart || invoice.products || invoice.items || [];
+      if (Array.isArray(items) && items.length > 0) {
+        const variants = items
+          .map((i) => i.variant_name || i.variant || i.option || 'Standard')
+          .filter(v => v);
+        if (variants.length > 0) {
+          variantInfo = variants.join(', ');
+        }
+      }
+
       let customerEmail = 'N/A';
       if (invoiceDetails?.customerEmail && invoiceDetails.customerEmail !== 'N/A') {
         customerEmail = invoiceDetails.customerEmail;
@@ -43,7 +61,6 @@ module.exports = {
         customerEmail = invoice.customer.email;
       }
 
-      // Handle payment method - could be string or object
       let paymentMethod = 'N/A';
       if (invoice.payment_method) {
         if (typeof invoice.payment_method === 'string') {
@@ -55,7 +72,6 @@ module.exports = {
 
       const isUsed = invoiceDetails ? '✅ Claimed' : '⏳ Pending';
 
-      // Format dates to AUS timezone with 12-hour format
       const formatAusDate = (date) => {
         if (!date) return 'N/A';
         
@@ -86,6 +102,7 @@ module.exports = {
         .setThumbnail('https://cdn.corenexis.com/f/sDDySVJJAoW.webp')
         .addFields(
           { name: '🛍️ **PRODUCT**', value: `**${products}**`, inline: false },
+          { name: '🏷️ **VARIANT**', value: `**${variantInfo}**`, inline: false },
           { name: '💰 **PRICE**', value: `**$${total}**`, inline: true },
           { name: '📊 **STATUS**', value: `**${statusEmoji} ${statusText}**`, inline: true },
           { name: '👤 **CUSTOMER EMAIL**', value: `**${customerEmail}**`, inline: false },
@@ -95,7 +112,6 @@ module.exports = {
           { name: '✅ **COMPLETED (AUS)**', value: `**${completedStr}**`, inline: true },
         );
 
-      // Add owner-only button if user is owner
       let components = [];
       if (isOwner({ user: interaction.user, guild: interaction.guild })) {
         const button = new ButtonBuilder()
