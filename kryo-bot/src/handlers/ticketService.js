@@ -199,13 +199,13 @@ function scheduleChannelDeletion(channel, ticket) {
     clearTimeout(scheduledDeletions.get(channel.id));
   }
 
-  let remainingTime = TWO_HOURS_MS;
+  const startTime = Date.now();
   let updateInterval = null;
 
   const updateCountdown = async () => {
     try {
-      const elapsed = Date.now() - (countdownMessages.get(channel.id)?.startTime || Date.now());
-      remainingTime = Math.max(0, TWO_HOURS_MS - elapsed);
+      const elapsed = Date.now() - startTime;
+      const remainingTime = Math.max(0, TWO_HOURS_MS - elapsed);
 
       const totalMinutes = Math.ceil(remainingTime / 60000);
       const hours = Math.floor(totalMinutes / 60);
@@ -234,6 +234,9 @@ function scheduleChannelDeletion(channel, ticket) {
     }
   };
 
+  // Run first update immediately
+  void updateCountdown();
+
   // Update countdown every 60 seconds (1 minute)
   updateInterval = setInterval(updateCountdown, 60000);
 
@@ -244,7 +247,11 @@ function scheduleChannelDeletion(channel, ticket) {
       if (updateInterval) clearInterval(updateInterval);
 
       // Send final transcript before deletion
-      await sendTranscript({ guild: channel.guild }, channel, ticket);
+      try {
+        await sendTranscript({ guild: channel.guild }, channel, ticket);
+      } catch (err) {
+        logError('ticket-final-transcript', err);
+      }
 
       // Send deletion notification
       try {
@@ -272,6 +279,7 @@ function scheduleChannelDeletion(channel, ticket) {
     } finally {
       countdownMessages.delete(channel.id);
       scheduledDeletions.delete(channel.id);
+      if (updateInterval) clearInterval(updateInterval);
     }
   }, TWO_HOURS_MS);
 
