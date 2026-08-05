@@ -31,6 +31,18 @@ module.exports = {
       // Get stored invoice details from database
       const invoiceDetails = storage.getInvoiceDetails(interaction.guild.id, invoiceId);
 
+      // Extract variant info from cart items
+      let variantInfo = 'N/A';
+      const items = invoice.cart || invoice.products || invoice.items || [];
+      if (Array.isArray(items) && items.length > 0) {
+        const variants = items
+          .map((i) => i.variant_name || i.variant || i.option || 'Standard')
+          .filter(v => v);
+        if (variants.length > 0) {
+          variantInfo = variants.join(', ');
+        }
+      }
+
       // Extract customer info - try multiple fields
       let customerEmail = 'N/A';
       if (invoiceDetails?.customerEmail && invoiceDetails.customerEmail !== 'N/A') {
@@ -86,6 +98,7 @@ module.exports = {
         .setThumbnail('https://cdn.corenexis.com/f/sDDySVJJAoW.webp')
         .addFields(
           { name: '🛍️ **PRODUCT**', value: `**${products}**`, inline: false },
+          { name: '🏷️ **VARIANT**', value: `**${variantInfo}**`, inline: false },
           { name: '💰 **PRICE**', value: `**$${total}**`, inline: true },
           { name: '📊 **STATUS**', value: `**${statusEmoji} ${statusText}**`, inline: true },
           { name: '👤 **CUSTOMER EMAIL**', value: `**${customerEmail}**`, inline: false },
