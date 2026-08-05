@@ -27,6 +27,15 @@ module.exports = {
     try {
       const user = interaction.options.getUser('user');
       const category = interaction.options.getString('category');
+
+      // Prevent users from sending links to themselves
+      if (user.id === interaction.user.id) {
+        return interaction.reply({
+          content: '❌ You cannot send links to yourself!',
+          ephemeral: true,
+        });
+      }
+
       const link = storage.dropLink(interaction.guild.id, category);
 
       if (!link) {
