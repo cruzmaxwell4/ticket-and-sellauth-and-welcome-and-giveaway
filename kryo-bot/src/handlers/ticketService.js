@@ -85,7 +85,7 @@ async function openTicket(interaction) {
     claimedBy: null,
     closed: false,
     createdAt: Date.now(),
-    hasResponded: false, // Flag to track if we've sent the auto-response yet
+    hasResponded: false,
   });
 
   await interaction.reply({ content: `Your ticket has been created: ${channel}`, ephemeral: true });
@@ -100,13 +100,10 @@ async function openTicket(interaction) {
   const infoEmbed = memberInfoEmbed({
     member,
     title: 'New Ticket',
+    description: 'Hello how can we help u today? Please provide Invoice/Order ID (optional).\n\n⚠️ **Important:** Don\'t send any info here other than Order/Invoice ID, Email, etc. No sensitive data!',
   });
 
-  // Send member info embed with control buttons
   await channel.send({ embeds: [infoEmbed], components: [ticketControlRow()] });
-
-  // Send help message in bold as a separate message
-  await channel.send({ content: '**Hello how can we help u today? Please provide Invoice/Order ID (optional)**' });
 
   return channel;
 }
@@ -156,14 +153,12 @@ async function closeTicket(interaction, channel, ticket) {
     }
   }
 
-  // opener can no longer type in a closed ticket
   try {
     await channel.permissionOverwrites.edit(ticket.openerId, { SendMessages: false });
   } catch (err) {
     logError('ticket-remove-user-perms', err);
   }
 
-  // Rename channel to "done-XXXX"
   try {
     const ticketNum = channel.name.match(/\d{4}$/)?.[0] || 'unknown';
     await channel.setName(`done-${ticketNum}`);
@@ -171,7 +166,6 @@ async function closeTicket(interaction, channel, ticket) {
     logError('ticket-rename-to-done', err);
   }
 
-  // Send closure message with countdown timer
   try {
     const embed = new EmbedBuilder()
       .setColor(0x2ecc71)
@@ -189,12 +183,10 @@ async function closeTicket(interaction, channel, ticket) {
     logError('ticket-send-closure-message', err);
   }
 
-  // Schedule channel deletion after 2 hours
   scheduleChannelDeletion(channel, ticket);
 }
 
 function scheduleChannelDeletion(channel, ticket) {
-  // Cancel any existing scheduled deletion for this channel
   if (scheduledDeletions.has(channel.id)) {
     clearTimeout(scheduledDeletions.get(channel.id));
   }
@@ -234,26 +226,20 @@ function scheduleChannelDeletion(channel, ticket) {
     }
   };
 
-  // Run first update immediately
   void updateCountdown();
 
-  // Update countdown every 60 seconds (1 minute)
   updateInterval = setInterval(updateCountdown, 60000);
 
-  // Schedule deletion after 2 hours
   const timeoutId = setTimeout(async () => {
     try {
-      // Clear the update interval
       if (updateInterval) clearInterval(updateInterval);
 
-      // Send final transcript before deletion
       try {
         await sendTranscript({ guild: channel.guild }, channel, ticket);
       } catch (err) {
         logError('ticket-final-transcript', err);
       }
 
-      // Send deletion notification
       try {
         const notificationEmbed = new EmbedBuilder()
           .setColor(0x2b2d31)
@@ -268,10 +254,8 @@ function scheduleChannelDeletion(channel, ticket) {
         // Message already deleted
       }
 
-      // Wait 10 seconds before deleting
       await new Promise(resolve => setTimeout(resolve, 10000));
 
-      // Delete the channel
       await channel.delete('Auto-deleted after 2 hours (ticket closure)');
       console.log(`[ticketService] Deleted done channel: ${channel.name}`);
     } catch (err) {
