@@ -1,14 +1,18 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const storage = require('../../utils/storage');
+const { isOwner } = require('../../utils/permissions');
 const { buildStaffWelcomeMessage } = require('../../handlers/staffWelcomeService');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('staffwlctest')
-    .setDescription('Send a test staff welcome message')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+    .setDescription('Send a test staff welcome message'),
 
   async execute(interaction) {
+    if (!isOwner(interaction)) {
+      return interaction.reply({ content: 'Only the owner can use this command.', ephemeral: true });
+    }
+
     const cfg = storage.getGuildConfig(interaction.guild.id);
 
     if (!cfg.staffWelcomeChannel) {

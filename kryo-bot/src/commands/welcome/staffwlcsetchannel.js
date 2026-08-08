@@ -1,11 +1,11 @@
-const { SlashCommandBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, ChannelType } = require('discord.js');
 const storage = require('../../utils/storage');
+const { isOwner } = require('../../utils/permissions');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('staffwlcsetchannel')
     .setDescription('Set the channel for staff welcome messages')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addChannelOption((opt) =>
       opt
         .setName('channel')
@@ -15,6 +15,10 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    if (!isOwner(interaction)) {
+      return interaction.reply({ content: 'Only the owner can use this command.', ephemeral: true });
+    }
+
     const channel = interaction.options.getChannel('channel');
     storage.setGuildConfig(interaction.guild.id, { staffWelcomeChannel: channel.id });
     await interaction.reply({ content: `✅ Staff welcome channel set to ${channel}.`, ephemeral: true });
