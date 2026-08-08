@@ -6,18 +6,20 @@ module.exports = {
   name: 'guildMemberUpdate',
   once: false,
   async execute(oldMember, newMember) {
+    if (!oldMember || !newMember) return Promise.resolve();
+    
     try {
       const cfg = storage.getGuildConfig(newMember.guild.id);
 
       // Check if staff welcome is enabled
       if (!cfg.staffWelcomeEnabled || !cfg.staffWelcomeChannel) {
-        return;
+        return Promise.resolve();
       }
 
       // Get the staff roles that trigger welcome
       const staffRoles = cfg.staffWelcomeRoles || [];
       if (staffRoles.length === 0) {
-        return;
+        return Promise.resolve();
       }
 
       // Check if any staff roles were added
@@ -26,13 +28,13 @@ module.exports = {
       );
 
       if (rolesAdded.size === 0) {
-        return;
+        return Promise.resolve();
       }
 
       // Get the channel and send welcome
       const channel = await newMember.guild.channels.fetch(cfg.staffWelcomeChannel);
       if (!channel) {
-        return;
+        return Promise.resolve();
       }
 
       const messageObj = buildStaffWelcomeMessage(newMember);
@@ -40,6 +42,8 @@ module.exports = {
     } catch (err) {
       logError('guildMemberUpdate-staff-welcome', err);
     }
+    
+    return Promise.resolve();
   },
 };
 
