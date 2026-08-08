@@ -20,7 +20,7 @@ const client = new Client({
     GatewayIntentBits.GuildModeration,
   ],
   partials: [Partials.Channel, Partials.Message],
-  failIfNotExists: false, // Don't crash if guild/role doesn't exist
+  failIfNotExists: false,
 });
 
 client.commands = new Collection();
@@ -70,8 +70,16 @@ const eventsDir = path.join(__dirname, 'events');
 for (const file of walk(eventsDir)) {
   try {
     const event = require(file);
-    if (event.once) client.once(event.name, (...args) => event.execute(...args).catch(err => logError(`event-${event.name}`, err)));
-    else client.on(event.name, (...args) => event.execute(...args).catch(err => logError(`event-${event.name}`, err)));
+    const handler = (...args) => {
+      const result = event.execute(...args);
+      if (result && typeof result.catch === 'function') {
+        return result.catch(err => logError(`event-${event.name}`, err));
+      }
+      return Promise.resolve();
+    };
+    
+    if (event.once) client.once(event.name, handler);
+    else client.on(event.name, handler);
   } catch (err) {
     logError('event-load', err, { file });
   }
@@ -84,14 +92,12 @@ const maxRecoveryAttempts = 3;
 
 client.once('ready', async () => {
   try {
-    recoveryAttempts = 0; // Reset on successful ready
+    recoveryAttempts = 0;
     console.log('[ready] Bot ready! Starting recovery pass...');
     
-    // Run auto-fix routine
     const fixResult = await autoFixCommonIssues(client);
     console.log('[ready] Auto-fix completed:', fixResult);
     
-    // Rehydrate giveaways that should still be running
     try {
       rehydrateGiveaways(client);
       console.log('[ready] Giveaways rehydrated.');
@@ -99,11 +105,9 @@ client.once('ready', async () => {
       logError('giveaway-rehydration', giveawayErr);
     }
     
-    // Perform initial health check
     const health = performHealthCheck(client);
     console.log('[ready] Health check:', health);
     
-    // Schedule periodic health checks (every 5 minutes)
     setInterval(() => {
       try {
         const healthStatus = performHealthCheck(client);
@@ -121,7 +125,6 @@ client.once('ready', async () => {
     
     if (recoveryAttempts < maxRecoveryAttempts) {
       console.log(`[recovery] Recovery failed, attempt ${recoveryAttempts}/${maxRecoveryAttempts}`);
-      // Schedule retry
       setTimeout(() => {
         client.emit('ready');
       }, 5000);
@@ -135,7 +138,6 @@ client.once('ready', async () => {
 process.on('unhandledRejection', (reason, promise) => {
   logError('unhandledRejection', reason, { promise: promise.toString() });
   
-  // Attempt recovery if it's a network error
   if (reason?.message?.includes('ECONNREFUSED') || reason?.message?.includes('timeout')) {
     console.log('[recovery] Network error detected, attempting to reconnect...');
     try {
@@ -154,7 +156,6 @@ process.on('uncaughtException', (err) => {
   console.error('[CRITICAL] Uncaught exception:', err.message);
   console.error('Bot may need to be restarted.');
   
-  // Attempt graceful shutdown and restart
   try {
     client.destroy();
     setTimeout(() => {
