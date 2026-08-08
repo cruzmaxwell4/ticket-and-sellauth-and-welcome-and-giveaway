@@ -65,6 +65,9 @@ const DEFAULT_GUILD_CONFIG = {
   welcomeChannel: null,
   welcomeEnabled: false,
   welcomeImage: null,
+  staffWelcomeChannel: null,
+  staffWelcomeEnabled: false,
+  staffWelcomeRoles: [],
 };
 
 function getGuildConfig(guildId) {
