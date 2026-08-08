@@ -22,7 +22,7 @@ async function handleChatInputCommand(interaction) {
     'ticket', 'ticketchannel', 'ticketpingroles', 'tickettrans', 'ticketdone',
     'addlink', 'showlink', 'clearlinks', 'allowdroplink', 'disallowdroplink', 'showdroplink',
     'pingrole', 'pingroleallow', 'bigrolescommands',
-    'giveaway', 'welcome'
+    'giveaway', 'welcome', 'staffwlcenable', 'staffwlcsetchannel', 'staffwlcroles', 'staffwlctest'
   ];
 
   if (staffCommands.includes(interaction.commandName)) {
@@ -57,55 +57,72 @@ async function handleTicketButton(interaction) {
   const ticket = storage.getTicket(interaction.channel.id);
 
   if (interaction.customId === 'ticket_open') {
-    return ticketService.openTicket(interaction);
+    await ticketService.openTicket(interaction);
+    return;
   }
 
   if (!ticket) {
-    return interaction.reply({ content: 'This is not a ticket channel.', ephemeral: true });
+    await interaction.reply({ content: 'This is not a ticket channel.', ephemeral: true });
+    return;
   }
 
   if (interaction.customId === 'ticket_transcript') {
     if (!isSupport(interaction, storage.getGuildConfig(interaction.guild.id))) {
-      return interaction.reply({ content: 'Only staff can request a transcript.', ephemeral: true });
+      await interaction.reply({ content: 'Only staff can request a transcript.', ephemeral: true });
+      return;
     }
     await interaction.deferReply({ ephemeral: true });
     await ticketService.sendTranscript(interaction, interaction.channel, ticket);
-    return interaction.editReply('Transcript sent.');
+    await interaction.editReply('Transcript sent.');
+    return;
   }
 
   if (interaction.customId === 'ticket_close') {
-    if (!isOwner(interaction)) return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+    if (!isOwner(interaction)) {
+      await interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+      return;
+    }
     await interaction.deferReply({ ephemeral: true });
     await ticketService.closeTicket(interaction, interaction.channel, ticket);
-    return interaction.editReply('Ticket closed.');
+    await interaction.editReply('Ticket closed.');
+    return;
   }
 
   if (interaction.customId === 'ticket_waste') {
-    if (!isOwner(interaction)) return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+    if (!isOwner(interaction)) {
+      await interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+      return;
+    }
     await interaction.deferReply({ ephemeral: true });
     try {
       const member = await ticketService.wasteOfTime(interaction, ticket);
-      return interaction.editReply(`${member.user.tag} has been timed out for 28 days.`);
+      await interaction.editReply(`${member.user.tag} has been timed out for 28 days.`);
     } catch (err) {
       logError('ticket_waste', err);
-      return interaction.editReply('Could not time out that member (missing permissions or role hierarchy issue).');
+      await interaction.editReply('Could not time out that member (missing permissions or role hierarchy issue).');
     }
+    return;
   }
 
   if (interaction.customId === 'ticket_giverole') {
-    if (!isOwner(interaction)) return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
-    return interaction.reply({
+    if (!isOwner(interaction)) {
+      await interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+      return;
+    }
+    await interaction.reply({
       content: 'Pick a role to give the ticket opener:',
       components: [ticketService.guildRoleSelectMenu(interaction.guild)],
       ephemeral: true,
     });
+    return;
   }
 }
 
 async function handleGiveawayEnter(interaction) {
   const giveaway = storage.getGiveaway(interaction.message.id);
   if (!giveaway || giveaway.ended) {
-    return interaction.reply({ content: 'This giveaway has ended.', ephemeral: true });
+    await interaction.reply({ content: 'This giveaway has ended.', ephemeral: true });
+    return;
   }
 
   const entries = giveaway.entries || [];
@@ -113,23 +130,33 @@ async function handleGiveawayEnter(interaction) {
   if (idx === -1) {
     entries.push(interaction.user.id);
     storage.setGiveaway(interaction.message.id, { entries });
-    return interaction.reply({ content: `You're entered for **${giveaway.prize}**! 🎉`, ephemeral: true });
+    await interaction.reply({ content: `You're entered for **${giveaway.prize}**! 🎉`, ephemeral: true });
+    return;
   }
 
   entries.splice(idx, 1);
   storage.setGiveaway(interaction.message.id, { entries });
-  return interaction.reply({ content: 'You left the giveaway.', ephemeral: true });
+  await interaction.reply({ content: 'You left the giveaway.', ephemeral: true });
 }
 
 async function handleTicketGiveRoleSelect(interaction) {
-  if (!isOwner(interaction)) return interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+  if (!isOwner(interaction)) {
+    await interaction.reply({ content: OWNER_ONLY_MSG, ephemeral: true });
+    return;
+  }
 
   const ticket = storage.getTicket(interaction.channel.id);
-  if (!ticket) return interaction.reply({ content: 'This is not a ticket channel.', ephemeral: true });
+  if (!ticket) {
+    await interaction.reply({ content: 'This is not a ticket channel.', ephemeral: true });
+    return;
+  }
 
   const roleId = interaction.values[0];
   const role = interaction.guild.roles.cache.get(roleId);
-  if (!role) return interaction.reply({ content: 'That role no longer exists.', ephemeral: true });
+  if (!role) {
+    await interaction.reply({ content: 'That role no longer exists.', ephemeral: true });
+    return;
+  }
 
   try {
     const member = await interaction.guild.members.fetch(ticket.openerId);
@@ -146,15 +173,27 @@ module.exports = {
   once: false,
   async execute(interaction) {
     try {
-      if (interaction.isChatInputCommand()) return handleChatInputCommand(interaction);
+      if (interaction.isChatInputCommand()) {
+        await handleChatInputCommand(interaction);
+        return;
+      }
 
       if (interaction.isButton()) {
-        if (interaction.customId.startsWith('ticket_')) return handleTicketButton(interaction);
-        if (interaction.customId === 'giveaway_enter') return handleGiveawayEnter(interaction);
+        if (interaction.customId.startsWith('ticket_')) {
+          await handleTicketButton(interaction);
+          return;
+        }
+        if (interaction.customId === 'giveaway_enter') {
+          await handleGiveawayEnter(interaction);
+          return;
+        }
       }
 
       if (interaction.isStringSelectMenu()) {
-        if (interaction.customId === 'ticket_giverole_select') return handleTicketGiveRoleSelect(interaction);
+        if (interaction.customId === 'ticket_giverole_select') {
+          await handleTicketGiveRoleSelect(interaction);
+          return;
+        }
       }
     } catch (err) {
       logError('interactionCreate', err, { userId: interaction.user?.id, guildId: interaction.guild?.id });
