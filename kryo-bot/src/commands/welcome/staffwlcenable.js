@@ -1,14 +1,18 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const storage = require('../../utils/storage');
+const { isOwner } = require('../../utils/permissions');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('staffwlcenable')
     .setDescription('Turn automatic staff welcome messages on or off')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addBooleanOption((opt) => opt.setName('enabled').setDescription('Enable staff welcome messages?').setRequired(true)),
 
   async execute(interaction) {
+    if (!isOwner(interaction)) {
+      return interaction.reply({ content: 'Only the owner can use this command.', ephemeral: true });
+    }
+
     const enabled = interaction.options.getBoolean('enabled');
     const cfg = storage.getGuildConfig(interaction.guild.id);
 

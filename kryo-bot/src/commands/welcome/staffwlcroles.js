@@ -1,19 +1,23 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const storage = require('../../utils/storage');
+const { isOwner } = require('../../utils/permissions');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('staffwlcroles')
     .setDescription('Set which roles trigger staff welcome messages')
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addRoleOption((opt) =>
       opt
         .setName('role')
-        .setDescription('Role to add to staff welcome trigger list')
+        .setDescription('Role to add/remove from staff welcome trigger list')
         .setRequired(true)
     ),
 
   async execute(interaction) {
+    if (!isOwner(interaction)) {
+      return interaction.reply({ content: 'Only the owner can use this command.', ephemeral: true });
+    }
+
     const role = interaction.options.getRole('role');
     const cfg = storage.getGuildConfig(interaction.guild.id);
     const roles = cfg.staffWelcomeRoles || [];
